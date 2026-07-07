@@ -1,0 +1,18 @@
+:root { --bg: #0f1117; --panel: #1a1d27; --accent: #4f8cff; --text: #e6e6e6; --muted: #8b8fa3; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+nav { background: var(--panel); padding: 12px 24px; display: flex; gap: 20px; border-bottom: 1px solid #2a2e3a; }
+nav a { color: var(--text); text-decoration: none; }
+nav a:hover { color: var(--accent); }
+.container { padding: 24px; max-width: 1200px; margin: 0 auto; }
+.card { background: var(--panel); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px; text-align: right; border-bottom: 1px solid #2a2e3a; }
+th { color: var(--muted); font-weight: 600; }
+button { background: var(--accent); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+button:hover { opacity: 0.9; }
+input { background: #0f1117; color: var(--text); border: 1px solid #2a2e3a; padding: 6px 10px; border-radius: 6px; width: 90px; }
+.muted { color: var(--muted); font-size: 13px; }
+.badge { padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+.badge.on { background: #1f5132; color: #6ee7a0; }
+.badge.off { background: #5a2226; color: #ff9a9a; }
