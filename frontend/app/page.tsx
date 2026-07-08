@@ -1,60 +1,132 @@
 'use client';
-import { useState } from 'react';
-import axios from 'axios';
 
-const API = '/v1';
+import { useEffect, useRef, useState } from 'react';
+import { ModelSidebar } from './components/ModelSidebar';
+import { ChatStream, Msg } from './components/ChatStream';
+import { Toast } from './components/Toast';
 
-export default function ChatPage() {
-  const [model, setModel] = useState('gc/gemini-2.5-flash');
-  const [msgs, setMsgs] = useState<{role:string;content:string}[]>([{role:'user',content:''}]);
+type Model = { alias: string; tier: string; active: boolean; auto_disabled: boolean };
+
+export default function Page() {
+  const [models, setModels] = useState<Model[]>([]);
+  const [selected, setSelected] = useState('');
+  const [query, setQuery] = useState('');
+  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
-  const [out, setOut] = useState('');
+  const [streaming, setStreaming] = useState(false);
+  const [err, setErr] = useState('');
+  const [showToast, setShowToast] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const streamRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch('/api/models')
+      .then((r) => r.json())
+      .then((data: Model[]) => {
+        const list = (data || []).filter((m) => m.active && !m.auto_disabled);
+        setModels(data || []);
+        if (list.length) setSelected(list[0].alias);
+      })
+      .catch(() => {
+        setErr('خطا در بارگذاری مدل‌ها');
+        setShowToast(true);
+      });
+  }, []);
+
+  useEffect(() => {
+    streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, streaming]);
 
   async function send() {
-    if (!input.trim()) return;
-    const payload = { model, messages: [{ role: 'user', content: input }], max_tokens: 1024, stream: true };
-    setOut('');
-    const res = await fetch(`${API}/chat/completions`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const reader = res.body!.getReader();
-    const dec = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = dec.decode(value);
-      chunk.split('\n').forEach(line => {
-        if (line.startsWith('data:') && !line.includes('[DONE]')) {
-          try {
-            const d = JSON.parse(line.slice(5));
-            const c = d.choices?.[0]?.delta?.content || '';
-            if (c) setOut(o => o + c);
-          } catch {}
-        }
-      });
-    }
-    setMsgs([...msgs, {role:'user',content:input},{role:'assistant',content:out}]);
+    if (!input.trim() || !selected || streaming) return;
+    const text = input.trim();
     setInput('');
+    setStreaming(true);
+    setErr('');
+    const userMsg: Msg = { role: 'user', content: text };
+    setMessages((m) => [...m, userMsg]);
+
+    const key = localStorage.getItem('api_key') || '12345.devkey';
+    try {
+      const res = await fetch('/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+        body: JSON.stringify({ model: selected, messages: [...messages, userMsg].map((m) => ({ role: m.role, content: m.content })), max_tokens: 2048 }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({ error: 'unknown' }));
+        throw new Error(e.error || 'HTTP ' + res.status);
+      }
+      const reader = res.body!.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      let acc = '';
+      // add empty assistant bubble
+      setMessages((m) => [...m, { role: 'assistant', content: '' }]);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value);
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          const t = line.trim();
+          if (!t.startsWith('data:')) continue;
+          const payload = t.slice(5).trim();
+          if (payload === '[DONE]') continue;
+          try {
+            const d = JSON.parse(payload);
+            if (d.error) throw new Error(d.error);
+            const c = d.choices?.[0]?.delta?.content || '';
+            if (c) {
+              acc += c;
+              setMessages((m) => {
+                const copy = [...m];
+                copy[copy.length - 1] = { role: 'assistant', content: acc };
+                return copy;
+              });
+            }
+          } catch (e: any) {
+            if (e.message) throw e;
+          }
+        }
+      }
+    } catch (e: any) {
+      setErr(e.message || 'خطا در ارتباط');
+      setShowToast(true);
+    } finally {
+      setStreaming(false);
+    }
   }
 
   return (
-    <div className="container">
-      <h1>چت با مدل‌ها</h1>
-      <div className="card">
-        <select value={model} onChange={e => setModel(e.target.value)} style={{ padding: 8, borderRadius: 6, background: '#0f1117', color: '#fff' }}>
-          <option>gc/gemini-2.5-flash</option>
-          <option>kr/claude-haiku-4.5</option>
-          <option>kr/deepseek-3.2</option>
-          <option>qd/qmodel_latest</option>
-        </select>
-        <div style={{ marginTop: 12, minHeight: 120, background: '#0f1117', padding: 12, borderRadius: 8 }}>
-          {out || <span className="muted">پاسخ اینجا نمایش داده میشه…</span>}
+    <div className={'app' + (mobileOpen ? ' mobile-open' : '')}>
+      <ModelSidebar models={models} selected={selected} onSelect={(a) => { setSelected(a); setMobileOpen(false); }} query={query} setQuery={setQuery} />
+      <main className="main">
+        <div className="topbar">
+          <button className="menu-btn" onClick={() => setMobileOpen((o) => !o)}>☰</button>
+          <span className="model-name">{selected || 'انتخاب مدل'}</span>
+          <span className="status"><span className="pulse" /> آماده</span>
         </div>
-        <textarea value={input} onChange={e => setInput(e.target.value)} placeholder="پیام خود را بنویسید…"
-          style={{ width: '100%', marginTop: 12, minHeight: 60, background: '#0f1117', color: '#fff', border: '1px solid #2a2e3a', borderRadius: 6 }} />
-        <button onClick={send} style={{ marginTop: 8 }}>ارسال</button>
-      </div>
+        <div className="stream" ref={streamRef}>
+          <ChatStream messages={messages} streaming={streaming} />
+        </div>
+        <div className="composer">
+          <div className="composer-inner">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder="پیام خود را بنویسید… (Enter برای ارسال)"
+              rows={1}
+            />
+            <button className="send-btn" onClick={send} disabled={streaming || !selected}>
+              ➤
+            </button>
+          </div>
+        </div>
+      </main>
+      <Toast message={err} show={showToast} onClose={() => setShowToast(false)} />
     </div>
   );
 }
