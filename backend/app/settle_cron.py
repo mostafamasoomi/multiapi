@@ -1,53 +1,74 @@
-#!/usr/bin/env python3
-"""Release stale holds (older than TTL) so wallets never freeze.
+"""PHASE-1: settle_cron — auto-release expired holds.
 
-Run inside the api container (has DB + asyncpg). Called by a cron job
-every minute: `python3 /app/settle_cron.py`
+Run continuously via:
+  python -m app.settle_cron
+
+Releases holds that have expired (expires_at < now) to prevent wallet freeze.
+Runs every 60 seconds.
 """
-import asyncio
-import os
-import asyncpg
+from __future__ import annotations
 
-RAW = os.getenv("DATABASE_URL", "postgresql://multiai2:***@127.0.0.1:5432/multiai2")
-DB = RAW.replace("postgresql+asyncpg://", "postgresql://")
+import asyncio
+import logging
+import os
+import sys
+from datetime import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import async_session
+from app.models import Hold
+from app.services.wallet import WalletService
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("settle_cron")
+
+CHECK_INTERVAL = 60  # 1 minute
+
+
+async def release_expired_holds():
+    """Release holds that have expired."""
+    try:
+        async with async_session() as db:
+            # Find expired active holds
+            now = datetime.utcnow()
+            expired = await db.execute(
+                select(Hold).where(
+                    Hold.status == "active",
+                    Hold.expires_at < now
+                ).with_for_update(skip_locked=True)
+            )
+            holds = list(expired.scalars().all())
+
+            if not holds:
+                return
+
+            logger.info(f"Found {len(holds)} expired holds to release")
+            ws = WalletService(db)
+
+            for hold in holds:
+                try:
+                    await ws.release(hold.request_id)
+                    logger.info(f"Released hold {hold.request_id} (user={hold.user_id}, "
+                               f"amount={hold.hold_amount_irr}IRR)")
+                except Exception as e:
+                    logger.error(f"Failed to release hold {hold.request_id}: {e}")
+                    # Continue with other holds
+
+            await db.commit()
+    except Exception as e:
+        logger.error(f"Settle cron failed: {e}")
 
 
 async def main():
-    conn = await asyncpg.connect(DB)
-    async with conn.transaction():
-        rows = await conn.fetch(
-            "SELECT id, user_id, hold_amount_irr, request_id FROM holds "
-            "WHERE status='active' AND expires_at < now() FOR UPDATE"
-        )
-        released = 0
-        for r in rows:
-            # 1) Mark hold as released
-            await conn.execute(
-                "UPDATE holds SET status='released', settled_amount_irr=0, "
-                "settled_at=now() WHERE id=$1",
-                r["id"],
-            )
-            # 2) Refund wallet (credit back the held amount)
-            await conn.execute(
-                "UPDATE wallets SET balance_irr = balance_irr + $1, "
-                "updated_at = now() WHERE user_id = $2",
-                r["hold_amount_irr"], r["user_id"],
-            )
-            # 3) Record in ledger for audit trail
-            balance = await conn.fetchval(
-                "SELECT balance_irr FROM wallets WHERE user_id = $1",
-                r["user_id"],
-            )
-            await conn.execute(
-                "INSERT INTO ledger (user_id, txn_type, amount_irr, "
-                "balance_after_irr, ref_type, ref_id, note, created_at) "
-                "VALUES ($1, 'release', $2, $3, 'hold', $4, $5, now())",
-                r["user_id"], r["hold_amount_irr"], balance,
-                r["request_id"], f"auto-release expired hold {r['request_id']}",
-            )
-            released += 1
-    await conn.close()
-    print(f"released {released} stale holds (wallets refunded)")
+    """Run settle cron in a loop."""
+    logger.info("Settle cron started")
+    while True:
+        await release_expired_holds()
+        await asyncio.sleep(CHECK_INTERVAL)
 
 
 if __name__ == "__main__":

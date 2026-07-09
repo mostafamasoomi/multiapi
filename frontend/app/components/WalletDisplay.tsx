@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 type WalletInfo = {
   balance_irr: number;
@@ -7,26 +7,48 @@ type WalletInfo = {
   daily_spend_cap_irr: number;
 };
 
-export function WalletDisplay({ apiKey }: { apiKey: string }) {
+export function WalletDisplay({ apiKey, refreshTrigger }: { apiKey: string; refreshTrigger?: number }) {
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchWallet = useCallback(async () => {
     if (!apiKey) return;
-    fetch('/api/me', {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
+    try {
+      const res = await fetch('/api/me', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
         setWallet({
           balance_irr: data.balance_irr || 0,
           daily_spend_used_irr: data.daily_spend_used_irr || 0,
           daily_spend_cap_irr: data.daily_spend_cap_irr || 0,
         });
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }
+    } catch (e) {
+      console.error('Failed to fetch wallet:', e);
+    } finally {
+      setLoading(false);
+    }
   }, [apiKey]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchWallet();
+  }, [fetchWallet]);
+
+  // Refresh when trigger changes (e.g., after chat completion)
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0) {
+      fetchWallet();
+    }
+  }, [refreshTrigger, fetchWallet]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchWallet, 30000);
+    return () => clearInterval(interval);
+  }, [fetchWallet]);
 
   if (loading) return <div className="wallet-loading">در حال بارگذاری...</div>;
   if (!wallet) return null;

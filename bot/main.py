@@ -20,12 +20,14 @@ from typing import Optional
 
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     Message, InlineQuery, InlineQueryResultArticle, InputTextMessageContent,
-    CallbackQuery, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup,
-    InlineKeyboardButton, InlineKeyboardMarkup
+    CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 )
-from aiogram.enums import ParseMode, ChatType
+from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 # Add parent dir for backend imports
@@ -42,6 +44,11 @@ BACKEND_INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("multiapi-bot")
 
+# ── FSM States ─────────────────────────────────────────────────────────────────
+
+class TopupStates(StatesGroup):
+    waiting_for_amount = State()
+
 # ── Router ─────────────────────────────────────────────────────────────────────
 
 router = Router()
@@ -56,7 +63,6 @@ async def cmd_start(message: Message):
     user_id = message.from_user.id
     username = message.from_user.username
 
-    # Register user in backend
     try:
         result = await api.register_telegram(user_id, username)
         balance = result.get("balance_irr", 0)
@@ -125,7 +131,6 @@ async def cmd_balance(message: Message):
         else:
             text += "**سقف روزانه:** ∞\n"
 
-        # Inline keyboard for topup
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="💳 شارژ کیف پول", callback_data="topup")]
         ])
@@ -144,7 +149,6 @@ async def cmd_models(message: Message):
             await message.answer("⚠️ مدلی موجود نیست.")
             return
 
-        # Group by tier
         tiers = {"pro": [], "standard": [], "mini": []}
         for m in models:
             t = m.get("tier", "standard")
@@ -221,12 +225,18 @@ async def cmd_topup(message: Message):
 # ── Callback: topup ────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("topup:"))
-async def cb_topup(callback: CallbackQuery):
+async def cb_topup(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     amount_str = callback.data.split(":")[1]
 
     if amount_str == "custom":
-        await callback.message.answer("💡 مبلغ مورد نظر را به ریال وارد کنید (مثال: 25000)")
+        await callback.message.edit_text(
+            "💡 **مبلغ مورد نظر را به ریال وارد کنید:**\n\n"
+            "مثال: `25000`\n\n"
+            "برای لغو: /cancel",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        await state.set_state(TopupStates.waiting_for_amount)
         await callback.answer()
         return
 
@@ -247,8 +257,72 @@ async def cb_topup(callback: CallbackQuery):
         else:
             await callback.message.edit_text("❌ خطا در ایجاد لینک پرداخت")
     except Exception as e:
-        await callback.message.edit_text(f"❌ خطا: {e}")
+        await callback.message.edit_text(f"❌ خطا در ایجاد پرداخت")
     await callback.answer()
+
+
+# ── FSM: Custom topup amount ──────────────────────────────────────────────────
+
+@router.message(TopupStates.waiting_for_amount)
+async def process_custom_amount(message: Message, state: FSMContext):
+    """Handle custom topup amount input."""
+    text = message.text.strip()
+
+    # Cancel check
+    if text.lower() in ['/cancel', 'لغو', 'cancel']:
+        await state.clear()
+        await message.answer("❌ عملیات لغو شد.")
+        return
+
+    # Validate amount
+    try:
+        amount = int(text.replace(",", "").replace("،", ""))
+        if amount < 10000:
+            await message.answer("⚠️ حداقل مبلغ شارژ: 10,000 ریال\nمجدداً تلاش کنید:")
+            return
+        if amount > 50_000_000:
+            await message.answer("⚠️ حداکثر مبلغ شارژ: 50,000,000 ریال\nمجدداً تلاش کنید:")
+            return
+    except ValueError:
+        await message.answer("⚠️ لطفاً یک عدد صحیح وارد کنید:\nمثال: `25000`")
+        return
+
+    # Clear state
+    await state.clear()
+
+    # Create payment
+    user_id = message.from_user.id
+    try:
+        result = await api.create_payment(user_id, amount)
+        url = result.get("url")
+        if url:
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔗 پرداخت", url=url)]
+            ])
+            await message.answer(
+                f"💳 **پرداخت {amount:,} ریال**\n\n"
+                f"روی دکمه زیر کلیک کنید:",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=kb
+            )
+        else:
+            await message.answer("❌ خطا در ایجاد لینک پرداخت")
+    except Exception as e:
+        await message.answer(f"❌ خطا در ایجاد پرداخت")
+
+
+# ── /cancel ────────────────────────────────────────────────────────────────────
+
+@router.message(Command("cancel"))
+async def cmd_cancel(message: Message, state: FSMContext):
+    """Cancel any ongoing operation."""
+    current_state = await state.get_state()
+    if current_state is None:
+        await message.answer("هیچ عملیاتی در حال انجام نیست.")
+        return
+
+    await state.clear()
+    await message.answer("✅ عملیات لغو شد.")
 
 
 # ── Inline Mode ────────────────────────────────────────────────────────────────
@@ -258,7 +332,6 @@ async def inline_query(query: InlineQuery, bot: Bot):
     """Handle inline queries: @multiapi_bot model_name message"""
     text = query.query.strip()
     if not text:
-        # Show help
         results = [
             InlineQueryResultArticle(
                 id="help",
@@ -274,7 +347,6 @@ async def inline_query(query: InlineQuery, bot: Bot):
         await query.answer(results, cache_time=1, is_personal=True)
         return
 
-    # Parse: first word = model, rest = message
     parts = text.split(maxsplit=1)
     model = parts[0] if len(parts) > 0 else "deepseek-chat"
     message_text = parts[1] if len(parts) > 1 else ""
@@ -294,7 +366,6 @@ async def inline_query(query: InlineQuery, bot: Bot):
         await query.answer(results, cache_time=0, is_personal=True)
         return
 
-    # Actually call the API
     try:
         user_id = query.from_user.id
         response = await api.chat_completion(
@@ -304,7 +375,10 @@ async def inline_query(query: InlineQuery, bot: Bot):
         )
         reply = response.get("response", "❌ خطا در پردازش")
     except Exception as e:
-        reply = f"❌ خطا: {e}"
+        reply = f"❌ خطا در پردازش"
+
+    # Escape markdown special chars in reply
+    safe_reply = reply.replace("*", "\\*").replace("_", "_").replace("`", "\\`")
 
     results = [
         InlineQueryResultArticle(
@@ -312,7 +386,7 @@ async def inline_query(query: InlineQuery, bot: Bot):
             title=f"⚡ {model}",
             description=reply[:100] + "..." if len(reply) > 100 else reply,
             input_message_content=InputTextMessageContent(
-                message_text=f"**{model}:**\n\n{reply}",
+                message_text=f"**{model}:**\n\n{safe_reply}",
                 parse_mode=ParseMode.MARKDOWN
             ),
         )
@@ -331,7 +405,10 @@ async def main():
         token=BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN)
     )
-    dp = Dispatcher()
+
+    # Storage for FSM
+    storage = MemoryStorage()
+    dp = Dispatcher(storage=storage)
     dp.include_router(router)
 
     logger.info("Bot starting...")

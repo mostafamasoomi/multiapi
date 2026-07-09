@@ -1,9 +1,10 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: 'multiapi — دروازه هوش مصنوعی',
-  description: 'چت با بهترین مدل‌های هوش مصنوعی از طریق یک دروازه واحد',
+  description: 'چت با بهترین مدلهای هوش مصنوعی از طریق یک دروازه واحد',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -16,7 +17,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

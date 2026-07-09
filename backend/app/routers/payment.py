@@ -62,16 +62,17 @@ async def create(req: CreatePay, db: AsyncSession = Depends(get_session)):
 
 @pay.get("/callback")
 async def callback(request: Request, db: AsyncSession = Depends(get_session)):
-    """Payment callback — verify and topup wallet."""
+    """Payment callback — verify and topup wallet.
+    SECURITY: user_id is recovered from order table, NOT from query params.
+    """
     params = dict(request.query_params)
     authority = params.get("Authority") or params.get("authority")
     status = params.get("Status")
-    user_id = params.get("user_id")
 
-    if not authority or not user_id:
-        return {"error": "missing params"}
+    if not authority:
+        return {"error": "missing authority parameter"}
 
-    # Find order by authority
+    # SECURITY: Find order by authority — user_id comes from order, NOT query
     order = await db.scalar(
         select(PaymentOrder).where(PaymentOrder.authority == authority))
     if not order:
@@ -83,12 +84,18 @@ async def callback(request: Request, db: AsyncSession = Depends(get_session)):
         balance = await ws.balance(order.user_id)
         return {"ok": True, "already_verified": True, "balance": balance}
 
-    # Verify with Zarinpal
+    # Check Zarinpal status (if Status=OK, proceed with verification)
+    if status and status != "OK":
+        order.status = "failed"
+        await db.commit()
+        return {"error": "payment not confirmed by gateway", "order_id": order.id}
+
+    # Verify with Zarinpal — amount comes from order table (NOT query)
     prov = get_provider()
     res = await prov.verify(authority, order.amount_irr)
 
     if res.get("data", {}).get("code") == 100:
-        # Success — topup wallet
+        # Success — topup wallet using user_id from order
         ref_id = str(res["data"].get("ref_id", ""))
         await complete_order(db, order.id, authority, ref_id)
 

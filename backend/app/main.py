@@ -12,17 +12,28 @@ No money logic in routers — it lives in services/.
 """
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.services.ninrouter import close_http_client
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("multiapi")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # PHASE-3: run brakes monitors, fx cache warm, pnl_daily cron.
+    """Startup/shutdown hooks."""
+    logger.info(f"Starting {settings.app_name} API...")
     yield
+    # Shutdown: close httpx client
+    logger.info("Shutting down...")
+    await close_http_client()
+
 
 app = FastAPI(title=f"{settings.app_name} API", version="0.1.0", lifespan=lifespan)
 
@@ -40,8 +51,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-from app.routers import chat, wallet, admin, payment, auth  # noqa: E402
-app.include_router(auth.router)
+from app.routers import chat, wallet, admin, payment  # noqa: E402
 app.include_router(chat.router)
 app.include_router(wallet.router)
 app.include_router(admin.router)

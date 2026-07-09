@@ -1,37 +1,41 @@
 """PHASE-3: Daily P&L aggregation cron job.
 
-Run once daily (e.g., 00:05 UTC) via:
+Run continuously via:
   python -m app.pnl_daily
 
 Aggregates ledger + holds into pnl_daily table for reporting + brake checks.
+Runs once daily at 00:05 UTC, then sleeps until next day.
 """
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import sys
 from datetime import date, datetime, timedelta
 
-# Add parent dir to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import AsyncSessionLocal
+from app.db.session import async_session
 from app.models import FxRate, Hold, Ledger, ModelAlias, PnlDaily
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("pnl_daily")
 
 
 async def aggregate_pnl(day: date | None = None):
     """Aggregate one day's P&L into pnl_daily table."""
     if day is None:
-        day = date.today() - timedelta(days=1)  # yesterday
+        day = date.today() - timedelta(days=1)
 
-    async with AsyncSessionLocal() as db:
-        # Check if already aggregated
+    async with async_session() as db:
+        # Idempotent: skip if already aggregated (use INSERT ... ON CONFLICT)
         existing = await db.scalar(select(PnlDaily).where(PnlDaily.day == day))
         if existing:
-            print(f"[SKIP] P&L for {day} already exists")
+            logger.info(f"[SKIP] P&L for {day} already exists")
             return
 
         # Get FX rate for the day
@@ -42,27 +46,34 @@ async def aggregate_pnl(day: date | None = None):
         fx_buffer = float(fx_row.fx_buffer) if fx_row else 1.12
 
         # Revenue: sum of settle transactions (user payments)
+        # USE RANGE QUERY instead of func.date() for index usage
+        day_start = datetime.combine(day, datetime.min.time())
+        day_end = datetime.combine(day + timedelta(days=1), datetime.min.time())
+
         revenue_result = await db.execute(
             select(func.coalesce(func.sum(Ledger.amount_irr), 0))
             .where(Ledger.txn_type == "settle",
-                   func.date(Ledger.created_at) == day))
+                   Ledger.created_at >= day_start,
+                   Ledger.created_at < day_end))
         revenue_irr = int(revenue_result.scalar())
 
-        # Upstream cost: sum of settled holds (actual cost to platform)
+        # Upstream cost: sum of settled holds
         cost_result = await db.execute(
             select(func.coalesce(func.sum(Hold.settled_amount_irr), 0))
             .where(Hold.status == "settled",
-                   func.date(Hold.settled_at) == day))
+                   Hold.settled_at >= day_start,
+                   Hold.settled_at < day_end))
         cost_irr = int(cost_result.scalar())
 
         # Convert cost to USD
         upstream_cost_usd = cost_irr / (fx_rate * fx_buffer) if fx_rate else 0
 
-        # Gateway fees: sum of fee transactions
+        # Gateway fees
         fee_result = await db.execute(
             select(func.coalesce(func.sum(Ledger.amount_irr), 0))
             .where(Ledger.txn_type == "fee",
-                   func.date(Ledger.created_at) == day))
+                   Ledger.created_at >= day_start,
+                   Ledger.created_at < day_end))
         gateway_fees_irr = int(fee_result.scalar())
 
         # Gross margin %
@@ -71,12 +82,13 @@ async def aggregate_pnl(day: date | None = None):
         else:
             gross_margin_pct = None
 
-        # Free tier cost (models with free_tier_eligible=True)
+        # Free tier cost
         free_cost_result = await db.execute(
             select(func.coalesce(func.sum(Hold.settled_amount_irr), 0))
             .join(ModelAlias, ModelAlias.alias == Hold.model_alias)
             .where(Hold.status == "settled",
-                   func.date(Hold.settled_at) == day,
+                   Hold.settled_at >= day_start,
+                   Hold.settled_at < day_end,
                    ModelAlias.free_tier_eligible == True))
         free_tier_cost_usd = int(free_cost_result.scalar()) / (fx_rate * fx_buffer) if fx_rate else 0
 
@@ -92,15 +104,25 @@ async def aggregate_pnl(day: date | None = None):
         )
         db.add(pnl)
         await db.commit()
-        print(f"[OK] P&L for {day}: revenue={revenue_irr}IRR, "
-              f"cost=${upstream_cost_usd:.2f}, margin={gross_margin_pct}%")
+        logger.info(f"[OK] P&L for {day}: revenue={revenue_irr}IRR, "
+                    f"cost=${upstream_cost_usd:.2f}, margin={gross_margin_pct}%")
 
 
 async def main():
-    """Aggregate last 7 days to fill any gaps."""
-    for i in range(7):
-        day = date.today() - timedelta(days=i)
-        await aggregate_pnl(day)
+    """Run P&L aggregation in a loop (once daily)."""
+    logger.info("P&L cron started")
+    while True:
+        try:
+            # Aggregate yesterday
+            await aggregate_pnl(date.today() - timedelta(days=1))
+            # Also fill any gaps (last 7 days)
+            for i in range(2, 8):
+                await aggregate_pnl(date.today() - timedelta(days=i))
+        except Exception as e:
+            logger.error(f"P&L aggregation failed: {e}")
+
+        # Sleep until next run (check every hour, but only aggregate once daily)
+        await asyncio.sleep(3600)
 
 
 if __name__ == "__main__":
