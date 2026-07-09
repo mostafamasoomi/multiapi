@@ -200,3 +200,19 @@ INSERT INTO plans (code, name, billing_type, monthly_price_irr, internal_quota_t
   ('business',   'Business',    'subscription', 0,    0,  FALSE, 0),
   ('prepaid',    'Prepaid',     'prepaid',      0,    0,  FALSE, 0);       -- pay-as-you-go wallet
 -- [VERIFY] monthly_price_irr values must be set from real IRR pricing decisions (out of PHASE-0 scope).
+
+-- -----------------------------------------------------------------------------
+-- Payment Orders (PHASE-6: Zarinpal order tracking)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS payment_orders (
+    id           TEXT PRIMARY KEY,
+    user_id      BIGINT NOT NULL REFERENCES users(id),
+    amount_irr   BIGINT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'pending',   -- pending | completed | failed
+    authority    TEXT,                               -- Zarinpal authority code
+    ref_id       TEXT,                               -- Zarinpal reference ID
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_payment_orders_user ON payment_orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_payment_orders_auth ON payment_orders(authority);

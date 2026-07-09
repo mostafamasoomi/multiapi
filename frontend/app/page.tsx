@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { AuthPanel } from './components/AuthPanel';
 import { ModelSidebar } from './components/ModelSidebar';
 import { ChatStream, Msg } from './components/ChatStream';
+import { WalletDisplay } from './components/WalletDisplay';
 import { Toast } from './components/Toast';
 
 type Model = { alias: string; tier: string; active: boolean; auto_disabled: boolean };
 
 export default function Page() {
+  const [apiKey, setApiKey] = useState('');
   const [models, setModels] = useState<Model[]>([]);
   const [selected, setSelected] = useState('');
   const [query, setQuery] = useState('');
@@ -19,8 +22,20 @@ export default function Page() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const streamRef = useRef<HTMLDivElement>(null);
 
+  // Check for existing API key on mount
   useEffect(() => {
-    fetch('/api/models')
+    const existing = localStorage.getItem('api_key');
+    if (existing) {
+      setApiKey(existing);
+    }
+  }, []);
+
+  // Load models when authenticated
+  useEffect(() => {
+    if (!apiKey) return;
+    fetch('/api/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    })
       .then((r) => r.json())
       .then((data: Model[]) => {
         const list = (data || []).filter((m) => m.active && !m.auto_disabled);
@@ -28,17 +43,21 @@ export default function Page() {
         if (list.length) setSelected(list[0].alias);
       })
       .catch(() => {
-        setErr('خطا در بارگذاری مدل‌ها');
+        setErr('خطا در بارگذاری مدلها');
         setShowToast(true);
       });
-  }, []);
+  }, [apiKey]);
 
   useEffect(() => {
     streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, streaming]);
 
+  function handleAuth(key: string) {
+    setApiKey(key);
+  }
+
   async function send() {
-    if (!input.trim() || !selected || streaming) return;
+    if (!input.trim() || !selected || streaming || !apiKey) return;
     const text = input.trim();
     setInput('');
     setStreaming(true);
@@ -46,12 +65,18 @@ export default function Page() {
     const userMsg: Msg = { role: 'user', content: text };
     setMessages((m) => [...m, userMsg]);
 
-    const key = localStorage.getItem('api_key') || '12345.devkey';
     try {
       const res = await fetch('/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-        body: JSON.stringify({ model: selected, messages: [...messages, userMsg].map((m) => ({ role: m.role, content: m.content })), max_tokens: 2048 }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: selected,
+          messages: [...messages, userMsg].map((m) => ({ role: m.role, content: m.content })),
+          max_tokens: 2048,
+        }),
       });
       if (!res.ok) {
         const e = await res.json().catch(() => ({ error: 'unknown' }));
@@ -99,14 +124,46 @@ export default function Page() {
     }
   }
 
+  function logout() {
+    localStorage.removeItem('api_key');
+    localStorage.removeItem('user_id');
+    setApiKey('');
+    setModels([]);
+    setSelected('');
+    setMessages([]);
+  }
+
+  // Show auth panel if not logged in
+  if (!apiKey) {
+    return (
+      <>
+        <AuthPanel onAuth={handleAuth} />
+        <Toast message={err} show={showToast} onClose={() => setShowToast(false)} />
+      </>
+    );
+  }
+
   return (
     <div className={'app' + (mobileOpen ? ' mobile-open' : '')}>
-      <ModelSidebar models={models} selected={selected} onSelect={(a) => { setSelected(a); setMobileOpen(false); }} query={query} setQuery={setQuery} />
+      <ModelSidebar
+        models={models}
+        selected={selected}
+        onSelect={(a) => { setSelected(a); setMobileOpen(false); }}
+        query={query}
+        setQuery={setQuery}
+      >
+        <WalletDisplay apiKey={apiKey} />
+      </ModelSidebar>
       <main className="main">
         <div className="topbar">
           <button className="menu-btn" onClick={() => setMobileOpen((o) => !o)}>☰</button>
           <span className="model-name">{selected || 'انتخاب مدل'}</span>
-          <span className="status"><span className="pulse" /> آماده</span>
+          <div className="topbar-right">
+            <span className="status"><span className="pulse" /> آماده</span>
+            <button className="logout-btn" onClick={logout} title="خروج">
+              🚪
+            </button>
+          </div>
         </div>
         <div className="stream" ref={streamRef}>
           <ChatStream messages={messages} streaming={streaming} />
@@ -117,7 +174,7 @@ export default function Page() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder="پیام خود را بنویسید… (Enter برای ارسال)"
+              placeholder="پیام خود را بنویسید... (Enter برای ارسال)"
               rows={1}
             />
             <button className="send-btn" onClick={send} disabled={streaming || !selected}>

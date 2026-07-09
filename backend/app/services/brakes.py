@@ -38,19 +38,22 @@ class BrakeService:
         return tripped
 
     async def per_model_margin_brake(self, threshold_pct: float = 5.0) -> list[str]:
-        """Auto-disable aliases whose trailing-24h realized margin < threshold."""
+        """Auto-disable aliases whose trailing-24h realized margin < threshold.
+        
+        Margin = (hold_amount - settled_amount) / hold_amount * 100
+        where settled_amount = actual cost paid to upstream.
+        """
         since = datetime.utcnow() - timedelta(hours=24)
         disabled = []
         rows = await self.db.execute(text("""
             SELECT ma.id, ma.alias,
-                   CASE WHEN SUM(l.amount_irr) = 0 THEN 100
-                        ELSE (SUM(l.amount_irr) - SUM(h.settled_amount_irr)) * 100.0
-                             / NULLIF(SUM(l.amount_irr),0)
+                   CASE WHEN SUM(h.hold_amount_irr) = 0 THEN 100
+                        ELSE (SUM(h.hold_amount_irr) - SUM(h.settled_amount_irr)) * 100.0
+                             / NULLIF(SUM(h.hold_amount_irr), 0)
                    END AS margin_pct
-            FROM ledger l
-            JOIN holds h ON h.request_id = l.ref_id AND l.ref_type='hold'
+            FROM holds h
             JOIN model_aliases ma ON ma.alias = h.model_alias
-            WHERE l.created_at >= :since AND l.txn_type='settle'
+            WHERE h.created_at >= :since AND h.status = 'settled'
             GROUP BY ma.id, ma.alias
         """), {"since": since})
         for ma_id, alias, margin in rows:

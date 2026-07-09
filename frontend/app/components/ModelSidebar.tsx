@@ -1,8 +1,9 @@
 'use client';
+import { ReactNode } from 'react';
 
 type Model = { alias: string; tier: string; active: boolean; auto_disabled: boolean };
 
-const TIER_LABEL: Record<string, string> = { mini: 'سبک', standard: 'استاندارد', pro: 'حرفه‌ای' };
+const TIER_LABEL: Record<string, string> = { mini: 'سبک', standard: 'استاندارد', pro: 'حرفهای' };
 
 export function ModelSidebar({
   models,
@@ -10,12 +11,14 @@ export function ModelSidebar({
   onSelect,
   query,
   setQuery,
+  children,
 }: {
   models: Model[];
   selected: string;
   onSelect: (a: string) => void;
   query: string;
   setQuery: (q: string) => void;
+  children?: ReactNode;
 }) {
   const filtered = models.filter((m) => m.alias.toLowerCase().includes(query.toLowerCase()));
   const groups: Record<string, Model[]> = { pro: [], standard: [], mini: [] };
@@ -31,9 +34,11 @@ export function ModelSidebar({
         <div className="name">multiapi</div>
       </div>
 
+      {children}
+
       <input
         className="search"
-        placeholder="جستجوی مدل…"
+        placeholder="جستجوی مدل..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
