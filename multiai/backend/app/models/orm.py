@@ -167,3 +167,15 @@ class GlobalSetting(Base):
     value_json: Mapped[dict] = mapped_column(Text)  # stored as JSON text
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow,
                                                  onupdate=datetime.utcnow)
+
+
+class PaymentOrder(Base):
+    __tablename__ = "payment_orders"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    amount_irr: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String, default="pending")  # pending | completed | failed
+    authority: Mapped[str | None] = mapped_column(String)
+    ref_id: Mapped[str | None] = mapped_column(String)  # Zarinpal ref_id
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

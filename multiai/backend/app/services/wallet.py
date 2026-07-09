@@ -69,11 +69,13 @@ class WalletService:
         self.db.add(led)
         return led
 
-    async def topup(self, user_id: int, amount_irr: int) -> int:
+    async def topup(self, user_id: int, amount_irr: int,
+                     note: str | None = None) -> int:
         if amount_irr <= 0:
             raise ValueError("amount must be positive")
         led = await self._append_ledger(user_id, "topup", amount_irr,
-                                         note="wallet topup", ref_type="payment")
+                                         note=note or "wallet topup",
+                                         ref_type="payment")
         await self.db.commit()
         await self.db.refresh(led)
         return led.balance_after_irr

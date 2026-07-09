@@ -27,6 +27,8 @@ from app.schemas.chat import ChatCompletionRequest
 from app.services.ninrouter import NineRouterClient
 from app.services.pricing import PricingService
 from app.services.wallet import WalletService
+from app.services.plan_quota import PlanQuotaService
+from app.services.brakes import BrakeService
 from app.models import ModelAlias
 from app.auth import verify_key
 from app.ratelimit import acquire, release
@@ -43,30 +45,61 @@ def count_tokens(text: str) -> int:
 @router.post("/chat/completions")
 async def chat_completions(req: ChatCompletionRequest, request: Request,
                            db: AsyncSession = Depends(get_session)):
+    ps = PricingService(db)
+    ws = WalletService(db)
+    pqs = PlanQuotaService(db)
+    bs = BrakeService(db)
+    client = NineRouterClient()
+
+    # Verify API key
     api_key = request.headers.get("authorization", "").replace("Bearer ", "")
     try:
         user_id = verify_key(api_key)
     except Exception:
         return _err(401, "unauthorized")
 
-    ps = PricingService(db)
-    ws = WalletService(db)
-    client = NineRouterClient()
-
+    # Resolve model alias
     ma = await db.scalar(select(ModelAlias).where(ModelAlias.alias == req.model))
     if not ma or not ma.is_active or ma.auto_disabled:
         return _err(404, f"model {req.model} unavailable")
-    # [COMPLIANCE-RISK] paid path must not use free/OAuth upstreams
-    is_paid_request = True
-    if is_paid_request and ma.free_tier_eligible:
+
+    # Compliance gate: paid path must NOT hit free/OAuth upstreams
+    if ma.free_tier_eligible:
         return _err(402, "model only available on free tier until paid upstream key is wired")
 
+    # PHASE-3: Kill switch check (if triggered, restrict to subscribers only)
+    ks = await bs.global_settings("kill_switch")
+    if ks.get("enabled"):
+        # Check if user is subscriber (has a paid plan)
+        from app.models import User
+        user_check = await db.scalar(select(User).where(User.id == user_id))
+        if not user_check or not user_check.plan_id:
+            return _err(503, "service temporarily restricted to subscribers")
+
+    # PHASE-2: Plan + quota check (BEFORE hold)
+    try:
+        user, plan, ma = await pqs.check_request(user_id, req.model, 0)
+    except Exception as e:
+        if hasattr(e, 'status_code'):
+            return _err(e.status_code, str(e.detail) if hasattr(e, 'detail') else str(e))
+        raise
+
+    # Calculate tokens and cost
     input_text = "\n".join(m.content for m in req.messages)
     input_tokens = count_tokens(input_text)
     max_tokens = min(req.max_tokens or ma.max_tokens_cap, ma.max_tokens_cap)
 
     est_cost, _ = await ps.estimate_cost_irr(req.model, input_tokens, max_tokens)
 
+    # PHASE-2: Re-check with estimated cost for spend cap
+    try:
+        user, plan, ma = await pqs.check_request(user_id, req.model, est_cost)
+    except Exception as e:
+        if hasattr(e, 'status_code'):
+            return _err(e.status_code, str(e.detail) if hasattr(e, 'detail') else str(e))
+        raise
+
+    # Place hold (prepaid only)
     request_id = str(uuid.uuid4())
     try:
         await ws.place_hold(user_id, est_cost, request_id, req.model,
@@ -76,7 +109,9 @@ async def chat_completions(req: ChatCompletionRequest, request: Request,
             return _err(402, "insufficient_funds")
         raise
 
+    # Rate limit check — MUST release hold if denied
     if not await acquire(user_id):
+        await ws.release(request_id)
         return _err(429, "rate_limited: max 3 concurrent chats per user")
 
     async def event_stream():
@@ -105,6 +140,9 @@ async def chat_completions(req: ChatCompletionRequest, request: Request,
                 in_p, out_p, _, _ = await ps.sell_price_per_1m(req.model)
                 actual = int((actual_in / 1e6) * in_p + (actual_out / 1e6) * out_p)
             await ws.settle(request_id, actual)
+            # PHASE-2: Record usage for quota tracking
+            if actual is not None:
+                await pqs.record_usage(user_id, req.model, actual, actual_in + actual_out)
             await release(user_id)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
