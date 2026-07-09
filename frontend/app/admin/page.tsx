@@ -404,7 +404,8 @@ function BrakesTab({ token }: { token: string }) {
   async function toggleKillSwitch(enable: boolean) {
     setToggling(true);
     try {
-      const r = await af(`/admin/brakes/kill-switch?enable=${enable}`, { method: 'POST' });
+      const KS_URL = '/admin/brakes/kill-switch';
+      const r = await af(`${KS_URL}?enable=${enable}`, { method: 'POST' });
       if (!r.ok) throw new Error('خطا');
       setToastOk(true); setToast(enable ? 'کیل سوئیچ فعال شد 🔴' : 'کیل سوئیچ غیرفعال شد 🟢'); load();
     } catch { setToastOk(false); setToast('خطا در تغییر کیل سوئیچ'); } finally { setToggling(false); }
@@ -465,7 +466,7 @@ export default function AdminPage() {
   if (!token) return <AdminLogin onLogin={setToken} />;
   function logout() { localStorage.removeItem('admin_token'); setToken(''); }
   return (
-    <div style={{ minHeight: '100vh', direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', direction: 'rtl', background: 'var(--bg)' }}>
       <div style={S.topbar}>
         <span style={{ fontSize: 22 }}>🛡️</span>
         <span style={S.brandName}>پنل مدیریت</span>
