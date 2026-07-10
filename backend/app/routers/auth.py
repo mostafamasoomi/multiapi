@@ -5,6 +5,8 @@ HttpOnly cookie support, Persian validation messages.
 """
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
@@ -25,6 +27,8 @@ from app.auth import (
 from app.services.wallet import WalletService
 
 router = APIRouter(prefix="/api", tags=["auth"])
+
+IS_PROD = os.getenv("ENV", "dev") == "prod"
 
 # ── Rate limiting (simple in-memory, per-IP) ──────────────────────────────────
 _rate_limit_store: dict[str, list[float]] = {}
@@ -141,7 +145,7 @@ async def register(req: RegisterRequest, request: Request, db: AsyncSession = De
         value=api_key,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=IS_PROD,
         max_age=30 * 24 * 3600,
         path="/",
     )
@@ -197,7 +201,7 @@ async def login(req: LoginRequest, request: Request, db: AsyncSession = Depends(
         value=api_key,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=IS_PROD,
         max_age=30 * 24 * 3600,
         path="/",
     )

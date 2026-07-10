@@ -348,10 +348,9 @@ class TelegramRegister(BaseModel):
 async def register_telegram_user(
     t: TelegramRegister,
     db: AsyncSession = Depends(get_session),
+    _auth: None = Depends(require_admin),
 ):
-    """Register or get existing Telegram user. Returns user info + balance.
-    NOTE: This endpoint is public (called by bot with internal token header).
-    """
+    """Register or get existing Telegram user (bot calls with admin token)."""
     ws = WalletService(db)
     user = await db.scalar(
         select(User).where(User.telegram_id == t.telegram_id))

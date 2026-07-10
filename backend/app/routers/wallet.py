@@ -25,16 +25,18 @@ async def _verify_user(
 
 
 @router.post("/topup")
-async def topup(req: WalletTopupRequest, db: AsyncSession = Depends(get_session)):
+async def topup(req: WalletTopupRequest, user_id: int = Depends(_verify_user),
+                db: AsyncSession = Depends(get_session)):
     # PROD SAFETY: raw topup is DEV-ONLY. Real money must come from the
     # payment provider (Zarinpal) verified callback, never a raw POST.
     if os.getenv("ALLOW_DEV_TOPUP", "false").lower() != "true":
         return JSONResponse(status_code=403, content={
             "error": "topup_disabled",
             "detail": "Topup only via verified payment callback."})
+    # Only allow topup for own wallet (ignore req.user_id, use authenticated user)
     ws = WalletService(db)
-    bal = await ws.topup(req.user_id, req.amount_irr)
-    return WalletBalance(user_id=req.user_id, balance_irr=bal, currency="IRR")
+    bal = await ws.topup(user_id, req.amount_irr)
+    return WalletBalance(user_id=user_id, balance_irr=bal, currency="IRR")
 
 
 @router.get("/me/balance")
