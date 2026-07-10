@@ -7,6 +7,7 @@ export function AuthPanel({ onAuth }: { onAuth: (key: string) => void }) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -17,10 +18,13 @@ export function AuthPanel({ onAuth }: { onAuth: (key: string) => void }) {
 
     try {
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const body: Record<string, string> = { email, password };
+      if (mode === 'register') body.username = username;
+
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -28,12 +32,16 @@ export function AuthPanel({ onAuth }: { onAuth: (key: string) => void }) {
         throw new Error(data.detail || 'خطا در احراز هویت');
       }
 
-      // Store API key and call onAuth
-      localStorage.setItem('api_key', data.api_key);
-      localStorage.setItem('user_id', String(data.user_id));
-      onAuth(data.api_key);
-    } catch (e: any) {
-      setError(e.message || 'خطا در ارتباط');
+      // API key from response body (also set as HttpOnly cookie)
+      if (data.api_key) {
+        localStorage.setItem('api_key', data.api_key);
+        localStorage.setItem('user_id', String(data.user_id));
+        onAuth(data.api_key);
+      } else {
+        throw new Error('پاسخی از سرور دریافت نشد');
+      }
+    } catch (err: any) {
+      setError(err.message || 'خطا در ارتباط با سرور');
     } finally {
       setLoading(false);
     }
@@ -42,34 +50,60 @@ export function AuthPanel({ onAuth }: { onAuth: (key: string) => void }) {
   return (
     <div className="auth-panel">
       <div className="auth-card">
-        <div className="auth-logo">⚡</div>
+        <div className="auth-logo">
+          <span className="auth-logo-icon">⚡</span>
+          <h1>MultiAPI</h1>
+        </div>
         <h2>{mode === 'login' ? 'ورود' : 'ثبت‌نام'}</h2>
-        <p className="auth-subtitle">به دروازه هوش مصنوعی خوش آمدید</p>
+        <p className="auth-subtitle">
+          {mode === 'login'
+            ? 'به پنل کاربری خود وارد شوید'
+            : 'حساب جدید بسازید و شروع کنید'}
+        </p>
+
+        {error && <div className="auth-error">{error}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>ایمیل</label>
+            <label htmlFor="email">ایمیل</label>
             <input
+              id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@example.com"
+              onChange={e => setEmail(e.target.value)}
+              placeholder="example@mail.com"
               required
+              autoFocus
+              dir="ltr"
             />
           </div>
+
+          {mode === 'register' && (
+            <div className="form-group">
+              <label htmlFor="username">نام کاربری (اختیاری)</label>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                placeholder="نام نمایشی"
+              />
+            </div>
+          )}
 
           <div className="form-group">
-            <label>رمز عبور</label>
+            <label htmlFor="password">رمز عبور</label>
             <input
+              id="password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              onChange={e => setPassword(e.target.value)}
+              placeholder="حداقل ۶ کاراکتر"
               required
+              minLength={6}
+              dir="ltr"
             />
           </div>
-
-          {error && <div className="auth-error">{error}</div>}
 
           <button type="submit" className="auth-btn" disabled={loading}>
             {loading ? 'در حال پردازش...' : mode === 'login' ? 'ورود' : 'ثبت‌نام'}
@@ -78,10 +112,14 @@ export function AuthPanel({ onAuth }: { onAuth: (key: string) => void }) {
 
         <div className="auth-switch">
           {mode === 'login' ? (
-            <>حساب ندارید؟ <button onClick={() => setMode('register')}>ثبت‌نام کنید</button></>
+            <>حساب ندارید؟{' '}<button onClick={() => { setMode('register'); setError(''); }}>ثبت‌نام کنید</button></>
           ) : (
-            <>قبلا ثبت‌نام کردید؟ <button onClick={() => setMode('login')}>ورود</button></>
+            <>قبلاً ثبت‌نام کردید؟{' '}<button onClick={() => { setMode('login'); setError(''); }}>ورود</button></>
           )}
+        </div>
+
+        <div className="auth-footer-note">
+          رمز عبور شما با bcrypt ذخیره و هرگز به صورت متن ساده نگهداری نمی‌شود.
         </div>
       </div>
     </div>

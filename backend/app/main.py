@@ -51,11 +51,12 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-from app.routers import chat, wallet, admin, payment  # noqa: E402
+from app.routers import chat, wallet, admin, payment, auth  # noqa: E402
 app.include_router(chat.router)
 app.include_router(wallet.router)
 app.include_router(admin.router)
 app.include_router(payment.router)
+app.include_router(auth.router)
 
 
 @app.get("/health", tags=["system"])

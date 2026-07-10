@@ -29,7 +29,22 @@ export default function AppPage() {
 
   useEffect(() => {
     const existing = localStorage.getItem('api_key');
-    if (existing) setApiKey(existing);
+    if (existing) {
+      // Validate token is still valid
+      fetch('/api/me', {
+        headers: { Authorization: `Bearer ${existing}` },
+      })
+        .then(r => {
+          if (!r.ok) throw new Error('token_invalid');
+          return r.json();
+        })
+        .then(() => setApiKey(existing))
+        .catch(() => {
+          localStorage.removeItem('api_key');
+          localStorage.removeItem('user_id');
+          setApiKey('');
+        });
+    }
   }, []);
 
   useEffect(() => {

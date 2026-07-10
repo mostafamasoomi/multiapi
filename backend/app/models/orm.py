@@ -44,6 +44,7 @@ class User(Base):
     telegram_id: Mapped[str | None] = mapped_column(String, unique=True)
     email: Mapped[str | None] = mapped_column(String, unique=True)
     username: Mapped[str | None]
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     plan_id: Mapped[int | None] = mapped_column(ForeignKey("plans.id"))
     status: Mapped[str] = mapped_column(String, default="active")
     is_internal: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -53,6 +54,20 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow,
                                                  onupdate=datetime.utcnow)
+
+
+class UserApiToken(Base):
+    """Per-user API tokens stored as SHA-256 hashes. Supports rotation, revocation, expiry."""
+    __tablename__ = "user_api_tokens"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)   # SHA-256 hex
+    name: Mapped[str | None] = mapped_column(String(128))               # e.g. "Web Panel", "CLI"
+    scope: Mapped[str] = mapped_column(String(32), default="full")      # full | read_only
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 
 class Wallet(Base):

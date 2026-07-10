@@ -56,7 +56,7 @@ async def chat_completions(req: ChatCompletionRequest, request: Request,
     # Verify API key
     api_key = request.headers.get("authorization", "").replace("Bearer ", "")
     try:
-        user_id = verify_key(api_key)
+        user_id = await verify_key(api_key, db)
     except Exception:
         return _err(401, "unauthorized")
 

@@ -1,36 +1,27 @@
-"""PHASE-1: wallet router (topup + balance + ledger view)."""
+"""PHASE-3: wallet router (topup + balance + ledger view)."""
 from __future__ import annotations
 import os
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.schemas.chat import WalletBalance, WalletTopupRequest
 from app.services.wallet import WalletService
-from app.auth import MASTER_SECRET
-import hmac as _hmac
-import hashlib
+from app.auth import verify_key
 
 router = APIRouter(prefix="/wallet", tags=["wallet"])
 
 
-def _verify_user(authorization: str = Header(None)) -> int:
-    """Extract user_id from API key."""
+async def _verify_user(
+    authorization: str = Header(None),
+    db: AsyncSession = Depends(get_session),
+) -> int:
+    """Extract and verify user_id from API key (legacy HMAC or DB token)."""
     api_key = (authorization or "").replace("Bearer ", "")
-    if not api_key or "." not in api_key:
-        raise HTTPException(status_code=401, detail="unauthorized")
-    user_str, sig = api_key.split(".", 1)
-    try:
-        user_id = int(user_str)
-    except ValueError:
-        raise HTTPException(status_code=401, detail="unauthorized")
-    expected = _hmac.HMAC(MASTER_SECRET.encode(), user_str.encode(),
-                          hashlib.sha256).hexdigest()
-    if not _hmac.compare_digest(expected, sig):
-        raise HTTPException(status_code=401, detail="unauthorized")
-    return user_id
+    return await verify_key(api_key, db)
 
 
 @router.post("/topup")
@@ -38,7 +29,6 @@ async def topup(req: WalletTopupRequest, db: AsyncSession = Depends(get_session)
     # PROD SAFETY: raw topup is DEV-ONLY. Real money must come from the
     # payment provider (Zarinpal) verified callback, never a raw POST.
     if os.getenv("ALLOW_DEV_TOPUP", "false").lower() != "true":
-        from fastapi.responses import JSONResponse
         return JSONResponse(status_code=403, content={
             "error": "topup_disabled",
             "detail": "Topup only via verified payment callback."})

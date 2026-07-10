@@ -52,7 +52,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8800/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -64,7 +64,7 @@ services:
       dockerfile: Dockerfile
     container_name: multiapi_frontend
     ports:
-      - "127.0.0.1:3000:3000"
+      - "0.0.0.0:3005:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
     depends_on:
