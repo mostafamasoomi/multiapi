@@ -14,8 +14,9 @@ export function SiteHeader() {
         <span style={{ fontWeight: 800, fontSize: 18, background: 'linear-gradient(135deg,#8b5cf6,#06b6d4)', WebkitBackgroundClip: 'text', color: 'transparent' }}>MultiAPI</span>
       </Link>
       <nav style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-        <Link href="/models" style={{ color: '#a1a1aa', fontSize: 14, textDecoration: 'none' }}>مدل‌ها</Link>
-        <Link href="/pricing" style={{ color: '#a1a1aa', fontSize: 14, textDecoration: 'none' }}>قیمت‌ها</Link>
+        <Link href="/models" style={{ color: '#a1a1aa', fontSize: 14, textDecoration: 'none' }}>مدلها</Link>
+        <Link href="/pricing" style={{ color: '#a1a1aa', fontSize: 14, textDecoration: 'none' }}>قیمتها</Link>
+        <Link href="/docs" style={{ color: '#a1a1aa', fontSize: 14, textDecoration: 'none' }}>مستندات</Link>
         <Link href="/app" style={{ padding: '8px 20px', borderRadius: 10, background: 'linear-gradient(135deg,#8b5cf6,#06b6d4)', color: '#fff', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>شروع کنید</Link>
       </nav>
     </header>
