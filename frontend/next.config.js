@@ -2,6 +2,7 @@
 const BACKEND = process.env.BACKEND_URL || 'http://127.0.0.1:8800';
 
 const nextConfig = {
+  output: 'standalone',
   reactStrictMode: true,
   async rewrites() {
     return [
@@ -10,7 +11,7 @@ const nextConfig = {
       { source: '/api/auth/login', destination: `${BACKEND}/api/auth/login` },
       { source: '/api/me', destination: `${BACKEND}/api/me` },
       // Models
-      { source: '/api/models', destination: `${BACKEND}/admin/models` },
+      { source: '/api/models', destination: `${BACKEND}/v1/models` },
       { source: '/api/models/list', destination: `${BACKEND}/admin/models/list` },
       // Chat
       { source: '/chat/completions', destination: `${BACKEND}/v1/chat/completions` },
@@ -20,8 +21,10 @@ const nextConfig = {
       // Payment
       { source: '/api/pay/create', destination: `${BACKEND}/pay/create` },
       { source: '/api/pay/callback', destination: `${BACKEND}/pay/callback` },
+      { source: '/api/memory', destination: `${BACKEND}/api/memory` },
+      { source: '/api/memory/:path*', destination: `${BACKEND}/api/memory/:path*` },
       // Admin
-      { source: '/admin/:path*', destination: `${BACKEND}/admin/:path*` },
+      { source: '/api/admin/:path*', destination: `${BACKEND}/admin/:path*` },
       { source: '/health', destination: `${BACKEND}/health` },
     ];
   },

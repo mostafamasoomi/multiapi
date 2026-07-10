@@ -1,16 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { AuthPanel } from './components/AuthPanel';
-import { ModelSidebar } from './components/ModelSidebar';
-import { ChatStream, Msg } from './components/ChatStream';
-import { WalletDisplay } from './components/WalletDisplay';
-import { SettingsPanel } from './components/SettingsPanel';
-import { Toast } from './components/Toast';
+import { AuthPanel } from '../components/AuthPanel';
+import { ModelSidebar } from '../components/ModelSidebar';
+import { ChatStream, Msg } from '../components/ChatStream';
+import { WalletDisplay } from '../components/WalletDisplay';
+import { SettingsPanel } from '../components/SettingsPanel';
+import { Toast } from '../components/Toast';
 
 type Model = { alias: string; tier: string; active: boolean; auto_disabled: boolean; context_window?: number };
 
-export default function Page() {
+export default function AppPage() {
   const [apiKey, setApiKey] = useState('');
   const [models, setModels] = useState<Model[]>([]);
   const [selected, setSelected] = useState('');
@@ -27,13 +27,11 @@ export default function Page() {
   const streamRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Check for existing API key on mount
   useEffect(() => {
     const existing = localStorage.getItem('api_key');
     if (existing) setApiKey(existing);
   }, []);
 
-  // Load models when authenticated
   useEffect(() => {
     if (!apiKey) return;
     fetch('/api/models', {
@@ -51,12 +49,10 @@ export default function Page() {
       });
   }, [apiKey]);
 
-  // Auto-scroll
   useEffect(() => {
     streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, streaming]);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -64,7 +60,6 @@ export default function Page() {
     }
   }, [input]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -76,9 +71,7 @@ export default function Page() {
     return () => window.removeEventListener('keydown', handler);
   }, [showSettings, mobileOpen]);
 
-  function handleAuth(key: string) {
-    setApiKey(key);
-  }
+  function handleAuth(key: string) { setApiKey(key); }
 
   const send = useCallback(async () => {
     if (!input.trim() || !selected || streaming || !apiKey) return;
@@ -134,9 +127,7 @@ export default function Page() {
                 return copy;
               });
             }
-          } catch (e: any) {
-            if (e.message) throw e;
-          }
+          } catch (e: any) { if (e.message) throw e; }
         }
       }
       setChatCount(c => c + 1);
@@ -152,19 +143,11 @@ export default function Page() {
   function logout() {
     localStorage.removeItem('api_key');
     localStorage.removeItem('user_id');
-    setApiKey('');
-    setModels([]);
-    setSelected('');
-    setMessages([]);
-    setChatCount(0);
+    setApiKey(''); setModels([]); setSelected(''); setMessages([]); setChatCount(0);
   }
 
-  function newChat() {
-    setMessages([]);
-    setChatCount(0);
-  }
+  function newChat() { setMessages([]); setChatCount(0); }
 
-  // Auth gate
   if (!apiKey) {
     return (
       <>
@@ -174,80 +157,34 @@ export default function Page() {
     );
   }
 
-  const selectedModel = models.find(m => m.alias === selected);
-
   return (
     <div className={`app${mobileOpen ? ' mobile-open' : ''}`}>
       {mobileOpen && <div className="mobile-overlay" onClick={() => setMobileOpen(false)} />}
-
-      <ModelSidebar
-        models={models}
-        selected={selected}
-        onSelect={a => { setSelected(a); setMobileOpen(false); }}
-        query={query}
-        setQuery={setQuery}
-      >
+      <ModelSidebar models={models} selected={selected} onSelect={a => { setSelected(a); setMobileOpen(false); }} query={query} setQuery={setQuery}>
         <WalletDisplay apiKey={apiKey} refreshTrigger={walletRefresh} />
       </ModelSidebar>
-
       <main className="main">
         <div className="topbar">
           <button className="menu-btn" onClick={() => setMobileOpen(o => !o)}>☰</button>
-          <span className="model-name">
-            <span className="model-icon">⚡</span>
-            {selected || 'انتخاب مدل'}
-          </span>
+          <span className="model-name"><span className="model-icon">⚡</span>{selected || 'انتخاب مدل'}</span>
           <div className="topbar-right">
-            <span className="status">
-              <span className="pulse" /> آماده
-            </span>
-            {chatCount > 0 && (
-              <button className="icon-btn" onClick={newChat} title="چت جدید">
-                ➕
-              </button>
-            )}
-            <button className="icon-btn" onClick={() => setShowSettings(true)} title="تنظیمات">
-              ⚙️
-            </button>
-            <button className="icon-btn danger" onClick={logout} title="خروج">
-              🚪
-            </button>
+            <span className="status"><span className="pulse" /> آماده</span>
+            {chatCount > 0 && <button className="icon-btn" onClick={newChat} title="چت جدید">➕</button>}
+            <button className="icon-btn" onClick={() => setShowSettings(true)} title="تنظیمات">⚙️</button>
+            <button className="icon-btn danger" onClick={logout} title="خروج">🚪</button>
           </div>
         </div>
-
-        <div className="stream" ref={streamRef}>
-          <ChatStream messages={messages} streaming={streaming} />
-        </div>
-
+        <div className="stream" ref={streamRef}><ChatStream messages={messages} streaming={streaming} /></div>
         <div className="composer">
           <div className="composer-inner">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              placeholder="پیام خود را بنویسید... (Enter برای ارسال، Shift+Enter برای خط جدید)"
-              rows={1}
-            />
-            <button className="send-btn" onClick={send} disabled={streaming || !selected || !input.trim()}>
-              {streaming ? '⏳' : '➤'}
-            </button>
+            <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder="پیام خود را بنویسید... (Enter برای ارسال)" rows={1} />
+            <button className="send-btn" onClick={send} disabled={streaming || !selected || !input.trim()}>{streaming ? '⏳' : '➤'}</button>
           </div>
         </div>
       </main>
-
-      <SettingsPanel
-        open={showSettings}
-        onClose={() => setShowSettings(false)}
-        apiKey={apiKey}
-        selectedModel={selected}
-      />
-
+      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} apiKey={apiKey} selectedModel={selected} />
       <Toast message={err} show={showToast} onClose={() => setShowToast(false)} />
     </div>
   );
