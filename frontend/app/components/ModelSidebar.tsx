@@ -12,6 +12,8 @@ export function ModelSidebar({
   query,
   setQuery,
   children,
+  capabilities,
+  onNewChat,
 }: {
   models: Model[];
   selected: string;
@@ -19,6 +21,8 @@ export function ModelSidebar({
   query: string;
   setQuery: (q: string) => void;
   children?: ReactNode;
+  capabilities?: Record<string, string[]>;
+  onNewChat?: () => void;
 }) {
   const filtered = models.filter((m) => m.alias.toLowerCase().includes(query.toLowerCase()));
   const groups: Record<string, Model[]> = { pro: [], standard: [], mini: [] };
@@ -33,6 +37,12 @@ export function ModelSidebar({
         <div className="logo">⚡</div>
         <div className="name">multiapi</div>
       </div>
+
+      {onNewChat && (
+        <button className="conv-new-btn" onClick={onNewChat} style={{ width: '100%', justifyContent: 'center', marginBottom: 4 }}>
+          چت جدید
+        </button>
+      )}
 
       {children}
 
@@ -50,17 +60,28 @@ export function ModelSidebar({
               <div className="model-group-label">{TIER_LABEL[tier] ?? tier}</div>
               {groups[tier].map((m) => {
                 const on = m.active && !m.auto_disabled;
+                const caps = capabilities?.[m.alias];
                 return (
                   <div
                     key={m.alias}
                     className={'model-item' + (m.alias === selected ? ' active' : '')}
                     onClick={() => onSelect(m.alias)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') onSelect(m.alias); }}
+                    role="button"
+                    tabIndex={0}
                   >
                     <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span className={'dot' + (on ? '' : ' off')} />
                       {m.alias}
                     </span>
                     <span className={'tier-badge ' + tier}>{TIER_LABEL[tier] ?? tier}</span>
+                    {caps && caps.length > 0 && (
+                      <div className="cap-tags">
+                        {caps.map((cap) => (
+                          <span key={cap} className="cap-tag">{cap}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
