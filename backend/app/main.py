@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.db.migrate import migrate
 from app.services.ninrouter import close_http_client
 
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +30,12 @@ logger = logging.getLogger("multiapi")
 async def lifespan(app: FastAPI):
     """Startup/shutdown hooks."""
     logger.info(f"Starting {settings.app_name} API...")
+    if settings.env != "test":
+        try:
+            await migrate()
+        except Exception:
+            logger.exception("Database migration failed; refusing to start")
+            raise
     yield
     # Shutdown: close httpx client
     logger.info("Shutting down...")
