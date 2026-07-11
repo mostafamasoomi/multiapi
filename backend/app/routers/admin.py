@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,7 +40,7 @@ class FxRateSet(BaseModel):
 
 class UserTopup(BaseModel):
     user_id: int
-    amount_irr: int
+    amount_irr: int = Field(gt=0, le=100_000_000_000)
     note: str | None = None
 
 

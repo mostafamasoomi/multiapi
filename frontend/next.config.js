@@ -11,7 +11,7 @@ const nextConfig = {
       { source: '/api/auth/login', destination: `${BACKEND}/api/auth/login` },
       { source: '/api/me', destination: `${BACKEND}/api/me` },
       // Models
-      { source: '/api/models', destination: `${BACKEND}/v1/models` },
+      { source: '/api/models', destination: `${BACKEND}/admin/models/list` },
       { source: '/api/models/list', destination: `${BACKEND}/admin/models/list` },
       // Chat
       { source: '/chat/completions', destination: `${BACKEND}/v1/chat/completions` },

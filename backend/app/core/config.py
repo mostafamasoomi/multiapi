@@ -6,7 +6,7 @@ refuses to boot (see assert). 9Router is INTERNAL ONLY.
 """
 from __future__ import annotations
 
-from pydantic import Field, computed_field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,8 +23,10 @@ class Settings(BaseSettings):
 
     redis_url: str = Field(default="redis://127.0.0.1:6379/0", alias="REDIS_URL")
 
+    # 9Router — INTERNAL ONLY.
+    ninrouter_base_url: str = Field(default="http://127.0.0.1:4001", alias="NINEROUTER_BASE_URL")
+
     # 9Router — INTERNAL ONLY. Bind 127.0.0.1.
-    ninrouter_base_url: str = Field(..., alias="NINEROUTER_BASE_URL")
     ninrouter_api_key: str = Field(default="", alias="NINEROUTER_API_KEY")
 
     fx_buffer: float = Field(default=1.12, alias="FX_BUFFER")
@@ -46,7 +48,8 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
 
-    @computed_field  # type: ignore[prop-decorator]
+    ninrouter_base_url: str = Field(default="http://127.0.0.1:4001", alias="NINEROUTER_BASE_URL")
+
     @property
     def ninrouter_is_internal(self) -> bool:
         """Refuse to boot if 9Router is not bound to localhost."""
