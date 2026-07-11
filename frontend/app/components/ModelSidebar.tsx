@@ -1,5 +1,6 @@
 'use client';
 import { ReactNode } from 'react';
+import Link from 'next/link';
 
 type Model = { alias: string; tier: string; active: boolean; auto_disabled: boolean };
 
@@ -90,6 +91,33 @@ export function ModelSidebar({
         )}
         {!filtered.length && <div className="muted" style={{ padding: 12, fontSize: 13 }}>مدلی یافت نشد</div>}
       </div>
+
+      <nav className="sidebar-nav">
+        <Link href="/app/notifications" className="sidebar-nav-item">
+          <span className="sidebar-nav-icon">🔔</span>
+          <span className="sidebar-nav-label">نوتیفیکیشنها</span>
+        </Link>
+        <Link href="/app/referral" className="sidebar-nav-item">
+          <span className="sidebar-nav-icon">👥</span>
+          <span className="sidebar-nav-label">دعوت دوستان</span>
+        </Link>
+        <Link href="/app/profile" className="sidebar-nav-item">
+          <span className="sidebar-nav-icon">👤</span>
+          <span className="sidebar-nav-label">پروفایل</span>
+        </Link>
+        <Link href="/app/payments" className="sidebar-nav-item">
+          <span className="sidebar-nav-icon">💳</span>
+          <span className="sidebar-nav-label">پرداختها</span>
+        </Link>
+        <Link href="/usage" className="sidebar-nav-item">
+          <span className="sidebar-nav-icon">📊</span>
+          <span className="sidebar-nav-label">مصرف</span>
+        </Link>
+        <Link href="/api-keys" className="sidebar-nav-item">
+          <span className="sidebar-nav-icon">🔑</span>
+          <span className="sidebar-nav-label">کلیدهای API</span>
+        </Link>
+      </nav>
 
       <div className="sidebar-foot">دروازه هوش مصنوعی · نسخه بتا</div>
     </aside>

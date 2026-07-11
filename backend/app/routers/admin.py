@@ -395,5 +395,5 @@ async def list_models_public(db: AsyncSession = Depends(get_session)):
     return [
         {"alias": m.alias, "tier": m.tier, "active": m.is_active,
          "auto_disabled": m.auto_disabled, "free_tier_eligible": m.free_tier_eligible}
-        for m in rows
+        for m in rows.scalars()
     ]

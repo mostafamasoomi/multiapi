@@ -258,15 +258,73 @@ async def me(
     balance = await ws.balance(user_id)
 
     return {
-        "user_id": user.id,
+        "id": user.id,
         "email": user.email,
         "username": user.username,
+        "phone": user.phone,
         "status": user.status,
+        "plan": str(user.plan_id) if user.plan_id is not None else "free",
         "plan_id": user.plan_id,
         "balance_irr": balance,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
         "daily_spend_used_irr": user.daily_spend_used_irr,
         "daily_spend_cap_irr": user.daily_spend_cap_irr,
     }
+
+
+# ── /profile — update profile ──────────────────────────────────────────────────
+
+class ProfileUpdate(BaseModel):
+    phone: str | None = None
+
+@router.put("/profile")
+async def update_profile(
+    body: ProfileUpdate,
+    user_id: int = Depends(_get_user_id),
+    db: AsyncSession = Depends(get_session),
+):
+    """Update current user profile (phone)."""
+    user = await db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(404, "کاربر یافت نشد")
+
+    if body.phone is not None:
+        user.phone = body.phone
+
+    await db.commit()
+    return {"message": "پروفایل با موفقیت بروزرسانی شد"}
+
+
+# ── /change-password ──────────────────────────────────────────────────────────
+
+class PasswordChange(BaseModel):
+    old_password: str
+    new_password: str
+
+@router.post("/change-password")
+async def change_password(
+    body: PasswordChange,
+    user_id: int = Depends(_get_user_id),
+    db: AsyncSession = Depends(get_session),
+):
+    """Change current user password."""
+    user = await db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(404, "کاربر یافت نشد")
+
+    if not user.password_hash:
+        raise HTTPException(400, "رمز عبور قبلی تنظیم نشده است")
+
+    if not verify_password(body.old_password, user.password_hash):
+        raise HTTPException(400, "رمز عبور فعلی اشتباه است")
+
+    if len(body.new_password) < 8:
+        raise HTTPException(400, "رمز عبور جدید باید حداقل ۸ کاراکتر باشد")
+
+    user.password_hash = hash_password(body.new_password)
+    await db.commit()
+
+    return {"message": "رمز عبور با موفقیت تغییر کرد"}
 
 
 # ── Public models catalog ──────────────────────────────────────────────────────

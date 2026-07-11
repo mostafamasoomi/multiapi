@@ -43,6 +43,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     telegram_id: Mapped[str | None] = mapped_column(String, unique=True)
     email: Mapped[str | None] = mapped_column(String, unique=True)
+    phone: Mapped[str | None] = mapped_column(String(32))
     username: Mapped[str | None]
     password_hash: Mapped[str | None] = mapped_column(String(255))
     plan_id: Mapped[int | None] = mapped_column(ForeignKey("plans.id"))
@@ -194,3 +195,12 @@ class PaymentOrder(Base):
     ref_id: Mapped[str | None] = mapped_column(String)  # Zarinpal ref_id
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    message: Mapped[str] = mapped_column(String(500))
+    read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

@@ -10,6 +10,8 @@ const nextConfig = {
       { source: '/api/auth/register', destination: `${BACKEND}/api/auth/register` },
       { source: '/api/auth/login', destination: `${BACKEND}/api/auth/login` },
       { source: '/api/me', destination: `${BACKEND}/api/me` },
+      { source: '/api/profile', destination: `${BACKEND}/api/profile` },
+      { source: '/api/change-password', destination: `${BACKEND}/api/change-password` },
       // Models
       { source: '/api/models', destination: `${BACKEND}/admin/models/list` },
       { source: '/api/models/list', destination: `${BACKEND}/admin/models/list` },
@@ -21,8 +23,14 @@ const nextConfig = {
       // Payment
       { source: '/api/pay/create', destination: `${BACKEND}/pay/create` },
       { source: '/api/pay/callback', destination: `${BACKEND}/pay/callback` },
+      { source: '/api/payments', destination: `${BACKEND}/payment/history` },
       { source: '/api/memory', destination: `${BACKEND}/api/memory` },
       { source: '/api/memory/:path*', destination: `${BACKEND}/api/memory/:path*` },
+      // Notifications
+      { source: '/api/notifications', destination: `${BACKEND}/api/notifications` },
+      { source: '/api/notifications/:nid/read', destination: `${BACKEND}/api/notifications/:nid/read` },
+      // Referral
+      { source: '/api/referral/stats', destination: `${BACKEND}/api/referral/stats` },
       // Admin
       { source: '/api/admin/:path*', destination: `${BACKEND}/admin/:path*` },
       { source: '/health', destination: `${BACKEND}/health` },

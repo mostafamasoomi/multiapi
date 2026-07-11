@@ -5,6 +5,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
+ARG BACKEND_URL=http://127.0.0.1:8800
+ENV BACKEND_URL=$BACKEND_URL
+
 COPY . .
 RUN npm run build
 

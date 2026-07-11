@@ -10,6 +10,7 @@ import { SettingsPanel } from '../components/SettingsPanel';
 import { Toast } from '../components/Toast';
 import { ConversationList, Conversation, Message } from '../components/ConversationList';
 import { UsagePill } from '../components/UsagePill';
+import { NotificationBell } from '../components/NotificationBell';
 
 type Model = { alias: string; tier: string; active: boolean; auto_disabled: boolean; context_window?: number };
 
@@ -469,6 +470,7 @@ export default function AppPage() {
           <div className="topbar-right">
             <span className="status"><span className="pulse" /> آماده</span>
             {chatCount > 0 && <button className="icon-btn" onClick={newChat} title="چت جدید">➕</button>}
+            <NotificationBell />
             <button className="icon-btn" onClick={() => setShowSettings(true)} title="تنظیمات">⚙️</button>
             <button className="icon-btn danger" onClick={logout} title="خروج">🚪</button>
           </div>
