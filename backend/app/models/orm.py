@@ -19,6 +19,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -180,7 +181,7 @@ class Quota(Base):
 class GlobalSetting(Base):
     __tablename__ = "global_settings"
     key: Mapped[str] = mapped_column(String, primary_key=True)
-    value_json: Mapped[dict] = mapped_column(Text)  # stored as JSON text
+    value_json: Mapped[dict] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow,
                                                  onupdate=datetime.utcnow)
 
@@ -204,3 +205,25 @@ class Notification(Base):
     message: Mapped[str] = mapped_column(String(500))
     read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class Referral(Base):
+    __tablename__ = "referrals"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    referrer_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    referred_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+    referral_code: Mapped[str] = mapped_column(String(32), index=True)
+    earnings_irr: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(256), default="چت جدید")
+    model: Mapped[str] = mapped_column(String(128), default="")
+    messages_json: Mapped[list] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow,
+                                                 onupdate=datetime.utcnow)

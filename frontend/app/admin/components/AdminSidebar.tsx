@@ -9,6 +9,8 @@ const TABS = [
   { key: 'users', label: 'کاربران', icon: '👥', href: '/admin/users' },
   { key: 'fx', label: 'نرخ ارز', icon: '💱', href: '/admin/fx' },
   { key: 'brakes', label: 'ترمزها', icon: '🛑', href: '/admin/brakes' },
+  { key: 'notifications', label: 'اعلانها', icon: '🔔', href: '/admin/notifications' },
+  { key: 'payments', label: 'پرداختها', icon: '💳', href: '/admin/payments' },
 ];
 
 export default function AdminSidebar({ onLogout }: { onLogout: () => void }) {

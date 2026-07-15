@@ -78,6 +78,24 @@ class WalletService:
                                          ref_type="payment")
         await self.db.commit()
         await self.db.refresh(led)
+
+        # Referral earnings: 10% of topup goes to referrer
+        REFERRAL_RATE = 0.10
+        try:
+            from app.models.orm import Referral
+            ref = await self.db.scalar(
+                select(Referral).where(Referral.referred_user_id == user_id)
+            )
+            if ref and amount_irr > 0:
+                earnings = int(amount_irr * REFERRAL_RATE)
+                ref.earnings_irr += earnings
+                await self._append_ledger(ref.referrer_user_id, "referral_earn", earnings,
+                                          note=f"referral from user {user_id} topup",
+                                          ref_type="referral", ref_id=str(ref.id))
+                await self.db.commit()
+        except Exception:
+            pass  # Don't fail topup if referral credit fails
+
         return led.balance_after_irr
 
     # ---- Two-phase HOLD ----
@@ -105,7 +123,9 @@ class WalletService:
         return hold
 
     async def settle(self, request_id: str, actual_cost_irr: int | None) -> Hold:
-        hold = await self.db.scalar(select(Hold).where(Hold.request_id == request_id))
+        hold = await self.db.scalar(
+            select(Hold).where(Hold.request_id == request_id).with_for_update()
+        )
         if not hold or hold.status != "active":
             raise ValueError("hold not active / not found")
         if actual_cost_irr is None:
@@ -126,7 +146,9 @@ class WalletService:
         return hold
 
     async def release(self, request_id: str) -> Hold:
-        hold = await self.db.scalar(select(Hold).where(Hold.request_id == request_id))
+        hold = await self.db.scalar(
+            select(Hold).where(Hold.request_id == request_id).with_for_update()
+        )
         if not hold or hold.status != "active":
             raise ValueError("hold not active / not found")
         hold.status = "released"

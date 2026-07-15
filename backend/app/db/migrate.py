@@ -29,9 +29,11 @@ async def migrate() -> None:
             if version in applied:
                 continue
             sql = path.read_text()
-            # Migration files are trusted repository code, but comments and
-            # dollar-quoted functions make naive semicolon splitting unsafe.
-            await conn.execute(text(sql))
+            # asyncpg rejects multi-statement prepared SQL. Execute the
+            # complete trusted script through the raw asyncpg connection.
+            raw = await conn.get_raw_connection()
+            driver = raw.driver_connection
+            await driver.execute(sql)
             await conn.execute(
                 text("INSERT INTO schema_migrations(version) VALUES (:version)"),
                 {"version": version},

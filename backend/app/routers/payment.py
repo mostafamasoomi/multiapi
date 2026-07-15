@@ -7,12 +7,13 @@ Features:
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
+from app.routers.auth import _get_user_id
 from app.models import PaymentOrder
 from app.services.payment import (
     get_provider, create_order, complete_order, get_user_orders
@@ -24,22 +25,18 @@ router = pay  # alias for main.py include_router(payment.router)
 
 
 class CreatePay(BaseModel):
-    user_id: int
-    amount_irr: int = 10000  # min
+    amount_irr: int = Field(ge=10_000, le=100_000_000_000)
 
 
 @pay.post("/create")
-async def create(req: CreatePay, db: AsyncSession = Depends(get_session)):
+async def create(req: CreatePay, user_id: int = Depends(_get_user_id), db: AsyncSession = Depends(get_session)):
     """Create payment link with order tracking."""
-    if req.amount_irr < 10000:
-        return {"error": "minimum topup is 10,000 IRR"}
-
     # Create order in DB
-    order = await create_order(db, req.user_id, req.amount_irr)
+    order = await create_order(db, user_id, req.amount_irr)
 
     # Create Zarinpal payment
     prov = get_provider()
-    res = await prov.create_payment(req.amount_irr, req.user_id,
+    res = await prov.create_payment(req.amount_irr, user_id,
                                      f"multiapi wallet topup #{order.id[:8]}")
 
     if res.get("data", {}).get("code") == 100:
@@ -103,6 +100,7 @@ async def callback(request: Request, db: AsyncSession = Depends(get_session)):
         await ws.topup(order.user_id, order.amount_irr,
                        note=f"payment #{order.id[:8]} ref:{ref_id}")
         balance = await ws.balance(order.user_id)
+        await db.commit()
 
         return {"ok": True, "order_id": order.id, "balance": balance}
     else:
@@ -111,8 +109,8 @@ async def callback(request: Request, db: AsyncSession = Depends(get_session)):
         return {"error": res.get("errors", [{}]), "order_id": order.id}
 
 
-@pay.get("/history/{user_id}")
-async def payment_history(user_id: int, limit: int = 20,
+@pay.get("/history")
+async def payment_history(user_id: int = Depends(_get_user_id), limit: int = Query(20, ge=1, le=100),
                           db: AsyncSession = Depends(get_session)):
     """Get user's payment history."""
     orders = await get_user_orders(db, user_id, limit)

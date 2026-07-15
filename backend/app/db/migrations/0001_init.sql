@@ -113,7 +113,7 @@ CREATE TABLE model_aliases (
     upstream_cost_output_usd_per_1m NUMERIC(12,6) NOT NULL,
     max_tokens_cap           INT     NOT NULL,          -- server-side hard cap (never trust client)
     context_window           INT,
-    free_tier_eligible       BOOLEAN NOT NULL DEFAULT FALSE, -- only models < ~$0.5/1M
+    free_tier_eligible       BOOLEAN NOT NULL DEFAULT FALSE, -- only models below 0.5 USD/1M
     is_active                BOOLEAN NOT NULL DEFAULT TRUE,
     auto_disabled            BOOLEAN NOT NULL DEFAULT FALSE,  -- per-model brake flips this
     created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -186,7 +186,7 @@ CREATE TABLE global_settings (
 
 INSERT INTO global_settings (key, value_json) VALUES
   ('kill_switch',               '{"enabled":false,"restrict_to_subscribers":false}'),
-  ('fx_circuit_breaker',        '{"pct":0.05,"lock_topups":true}'),           -- if today's rate > last-pricing*1.05
+  ('fx_circuit_breaker',        '{"pct":0.05,"lock_topups":true}'),
   ('per_model_margin_brake',    '{"threshold_pct":5.0,"auto_disable":true}'),
   ('global_daily_upstream_cap_usd', '{"cap_usd":500.0}'),
   ('fx_buffer',                 '{"value":1.12}');
@@ -197,6 +197,6 @@ INSERT INTO global_settings (key, value_json) VALUES
 INSERT INTO plans (code, name, billing_type, monthly_price_irr, internal_quota_tokens, free_tier, daily_token_cap) VALUES
   ('free',       'Free',        'free',         0,    0,  TRUE,  50000),   -- cheap models only, hard daily cap
   ('pro',        'Pro',         'subscription', 0,    0,  FALSE, 0),       -- fair-use internal quota via ledger
-  ('business',   'Business',    'subscription', 0,    0,  FALSE, 0),
-  ('prepaid',    'Prepaid',     'prepaid',      0,    0,  FALSE, 0);       -- pay-as-you-go wallet
+  ('business',   'Business',   'subscription', 0,    0,  FALSE, 0),
+  ('prepaid',    'Prepaid',    'prepaid',      0,    0,  FALSE, 0);       -- pay-as-you-go wallet
 -- [VERIFY] monthly_price_irr values must be set from real IRR pricing decisions (out of PHASE-0 scope).

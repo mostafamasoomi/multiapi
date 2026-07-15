@@ -12,8 +12,16 @@ export function AdminLogin({ onLogin }: { onLogin: (token: string) => void }) {
     setLoading(true);
     setErr('');
     try {
-      const r = await fetch('/health');
-      if (!r.ok) throw new Error('سرور در دسترس نیست');
+      // Verify token by making an actual admin API call (through Next.js proxy)
+      const r = await fetch('/api/admin/brakes/status', {
+        headers: { Authorization: `Bearer ${token.trim()}` },
+      });
+      if (!r.ok) {
+        if (r.status === 401) {
+          throw new Error('توکن ادمین نامعتبر است');
+        }
+        throw new Error('سرور در دسترس نیست');
+      }
       setAdminToken(token.trim());
       onLogin(token.trim());
     } catch (e: any) {

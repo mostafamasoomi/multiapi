@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { SiteHeader, SiteFooter } from '../components/SiteLayout';
 
 const features = [
   { icon: '🤖', title: 'چندین مدل برتر', desc: 'GPT-4o، Claude، DeepSeek و مدل‌های دیگر — همه با یک حساب' },
@@ -20,7 +19,6 @@ const stats = [
 export default function Home() {
   return (
     <div style={{ background: '#09090b', color: '#fafafa', fontFamily: 'Vazirmatn, system-ui, sans-serif', overflowX: 'hidden' }}>
-      <SiteHeader />
 
       {/* Hero */}
       <section style={{ padding: '140px 24px 80px', textAlign: 'center', maxWidth: 800, margin: '0 auto', position: 'relative' }}>
@@ -88,7 +86,6 @@ export default function Home() {
         <Link href="/app" style={{ display: 'inline-block', padding: '16px 40px', borderRadius: 14, background: 'linear-gradient(135deg, #8b5cf6, #06b6d4)', color: '#fff', fontWeight: 800, fontSize: 17, textDecoration: 'none', boxShadow: '0 8px 40px rgba(139,92,246,0.35)' }}>شروع رایگان</Link>
       </section>
 
-      <SiteFooter />
     </div>
   );
 }

@@ -16,6 +16,7 @@ interface DataTableProps<T = Record<string, unknown>> {
   emptyMessage?: string;
   pageSize?: number;
   rowKey?: keyof T | ((row: T, index: number) => string | number);
+  onRowClick?: (row: T) => void;
 }
 
 const styles: Record<string, React.CSSProperties> = {

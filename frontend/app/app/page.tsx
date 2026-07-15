@@ -12,6 +12,45 @@ import { ConversationList, Conversation, Message } from '../components/Conversat
 import { UsagePill } from '../components/UsagePill';
 import { NotificationBell } from '../components/NotificationBell';
 
+// ── Server-side conversation sync ──────────────────────────────────────────────
+async function fetchConversations(token: string): Promise<ConversationData[]> {
+  try {
+    const res = await fetch('/api/conversations', { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (Array.isArray(data) ? data : []).map((c: any) => ({
+      id: String(c.id),
+      title: c.title,
+      model: c.model,
+      messages: c.messages || [],
+      createdAt: new Date(c.updated_at || c.created_at).getTime(),
+      serverSynced: true,
+    }));
+  } catch { return []; }
+}
+
+async function saveConversation(token: string, conv: ConversationData) {
+  try {
+    const method = conv.serverSynced ? 'PUT' : 'POST';
+    const url = conv.serverSynced ? `/api/conversations/${conv.id}` : '/api/conversations';
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ title: conv.title, model: conv.model, messages: conv.messages }),
+    });
+    if (res.ok && method === 'POST') {
+      const data = await res.json();
+      return String(data.id);
+    }
+  } catch {}
+  return null;
+}
+
+async function deleteConversationServer(token: string, id: string) {
+  try { await fetch(`/api/conversations/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); } catch {}
+}
+
+
 type Model = { alias: string; tier: string; active: boolean; auto_disabled: boolean; context_window?: number };
 
 type ConversationData = {
@@ -20,6 +59,7 @@ type ConversationData = {
   model: string;
   messages: Msg[];
   createdAt: number;
+  serverSynced?: boolean;
 };
 
 function generateId() {
@@ -88,7 +128,14 @@ export default function AppPage() {
           if (!r.ok) throw new Error('token_invalid');
           return r.json();
         })
-        .then(() => setApiKey(existing))
+        .then(async () => {
+          setApiKey(existing);
+          // Load server conversations
+          const serverConvs = await fetchConversations(existing);
+          if (serverConvs.length > 0) {
+            setConversations(serverConvs);
+          }
+        })
         .catch(() => {
           localStorage.removeItem('api_key');
           localStorage.removeItem('user_id');
@@ -148,6 +195,7 @@ export default function AppPage() {
   }
 
   function deleteConversation(id: string) {
+    if (apiKey) deleteConversationServer(apiKey, id);
     setConversations(prev => prev.filter(c => c.id !== id));
     if (activeConvId === id) {
       setActiveConvId(null);
@@ -370,6 +418,15 @@ export default function AppPage() {
       );
       setChatCount(c => c + 1);
       setWalletRefresh(r => r + 1);
+      // Server sync
+      if (apiKey && convId) {
+        const conv = conversations.find(c => c.id === convId) || { id: convId, title: text.slice(0, 30), model: selected, messages: newMessages, createdAt: Date.now(), serverSynced: false };
+        conv.messages = finalMessages;
+        const serverId = await saveConversation(apiKey, conv);
+        if (serverId && !conv.serverSynced) {
+          setConversations(prev => prev.map(c => c.id === convId ? { ...c, id: serverId, serverSynced: true } : c));
+        }
+      }
     } catch (e: any) {
       if (e.name !== 'AbortError') {
         setErr(e.message || 'خطا در ارتباط');

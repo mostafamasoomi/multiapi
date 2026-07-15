@@ -70,6 +70,7 @@ async def list_models(
             "in_margin": float(pr.input_margin_factor),
             "out_margin": float(pr.output_margin_factor),
             "max_tokens_cap": ma.max_tokens_cap,
+            "context_window": ma.context_window,
         })
     return out
 
@@ -193,7 +194,7 @@ async def user_ledger(
     db: AsyncSession = Depends(get_session),
 ):
     """Get user's ledger (transaction history)."""
-    rows = await db.execute(
+    result = await db.execute(
         select(Ledger).where(Ledger.user_id == user_id)
         .order_by(Ledger.created_at.desc()).limit(limit))
     return [
@@ -201,7 +202,7 @@ async def user_ledger(
          "balance_after_irr": r.balance_after_irr, "note": r.note,
          "ref_type": r.ref_type, "ref_id": r.ref_id,
          "created_at": r.created_at.isoformat() if r.created_at else None}
-        for r in rows
+        for r in result.scalars()
     ]
 
 
@@ -217,7 +218,7 @@ async def pnl(
         {"day": r.day.isoformat(), "revenue_irr": r.revenue_irr,
          "upstream_cost_usd": float(r.upstream_cost_usd),
          "gross_margin_pct": float(r.gross_margin_pct) if r.gross_margin_pct else None}
-        for r in rows
+        for r in rows.scalars()
     ]
 
 
@@ -253,7 +254,7 @@ async def fx_history(
     return [
         {"rate_date": r.rate_date.isoformat(), "usd_to_irr": float(r.usd_to_irr),
          "fx_buffer": float(r.fx_buffer), "source": r.source}
-        for r in rows
+        for r in rows.scalars()
     ]
 
 
@@ -388,12 +389,173 @@ async def register_telegram_user(
 # ── Public Models API (for bot) ────────────────────────────────────────────────
 
 @admin.get("/models/list")
-async def list_models_public(db: AsyncSession = Depends(get_session)):
-    """Public models list (no auth needed for bot)."""
+async def list_models_public(
+    db: AsyncSession = Depends(get_session),
+):
+    """Public models list (no auth needed — used by frontend)."""
     rows = await db.execute(select(ModelAlias).where(
         ModelAlias.is_active == True, ModelAlias.auto_disabled == False))
     return [
         {"alias": m.alias, "tier": m.tier, "active": m.is_active,
-         "auto_disabled": m.auto_disabled, "free_tier_eligible": m.free_tier_eligible}
+         "auto_disabled": m.auto_disabled, "free_tier_eligible": m.free_tier_eligible,
+         "context_window": m.context_window}
         for m in rows.scalars()
     ]
+
+
+# ── User Detail ──────────────────────────────────────────────────────────────
+
+@admin.get("/users/{user_id}")
+async def user_detail(
+    user_id: int,
+    _auth: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """Get full user detail including wallet, referrals, API keys count."""
+    user = await db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(404, "user not found")
+    wallet = await db.scalar(select(Wallet).where(Wallet.user_id == user_id))
+    
+    # Count referrals
+    from app.models.orm import Referral, UserApiToken, Conversation
+    ref_count = await db.scalar(
+        select(func.count()).select_from(Referral).where(Referral.referrer_user_id == user_id)
+    ) or 0
+    
+    # Count API keys
+    key_count = await db.scalar(
+        select(func.count()).select_from(UserApiToken).where(
+            UserApiToken.user_id == user_id, UserApiToken.revoked == False
+        )
+    ) or 0
+    
+    # Count conversations
+    conv_count = await db.scalar(
+        select(func.count()).select_from(Conversation).where(Conversation.user_id == user_id)
+    ) or 0
+    
+    return {
+        "id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "phone": user.phone,
+        "telegram_id": user.telegram_id,
+        "status": user.status,
+        "plan_id": user.plan_id,
+        "is_internal": user.is_internal,
+        "balance_irr": wallet.balance_irr if wallet else 0,
+        "daily_spend_used_irr": user.daily_spend_used_irr,
+        "daily_spend_cap_irr": user.daily_spend_cap_irr,
+        "referral_count": ref_count,
+        "api_key_count": key_count,
+        "conversation_count": conv_count,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "updated_at": user.updated_at.isoformat() if user.updated_at else None,
+    }
+
+
+# ── Notifications Management ─────────────────────────────────────────────────
+
+@admin.get("/notifications")
+async def list_all_notifications(
+    limit: int = 50,
+    _auth: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """List recent notifications across all users."""
+    from app.models.orm import Notification
+    rows = await db.execute(
+        select(Notification, User.email).join(
+            User, Notification.user_id == User.id, isouter=True
+        ).order_by(Notification.created_at.desc()).limit(limit)
+    )
+    return [
+        {
+            "id": n.id,
+            "user_id": n.user_id,
+            "user_email": email,
+            "message": n.message,
+            "read": n.read,
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+        }
+        for n, email in rows
+    ]
+
+
+@admin.post("/notifications")
+async def send_notification(
+    body: dict,
+    _auth: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """Send notification to a user."""
+    from app.models.orm import Notification
+    user_id = body.get("user_id")
+    message = body.get("message", "")
+    if not user_id or not message:
+        raise HTTPException(400, "user_id and message required")
+    
+    notif = Notification(user_id=user_id, message=message)
+    db.add(notif)
+    await db.commit()
+    return {"ok": True, "message": "notification sent"}
+
+
+# ── Payment Orders ───────────────────────────────────────────────────────────
+
+@admin.get("/payments")
+async def list_all_payments(
+    limit: int = 50,
+    _auth: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """List recent payment orders."""
+    from app.models.orm import PaymentOrder
+    rows = await db.execute(
+        select(PaymentOrder, User.email).join(
+            User, PaymentOrder.user_id == User.id, isouter=True
+        ).order_by(PaymentOrder.created_at.desc()).limit(limit)
+    )
+    return [
+        {
+            "id": o.id,
+            "user_id": o.user_id,
+            "user_email": email,
+            "amount_irr": o.amount_irr,
+            "status": o.status,
+            "authority": o.authority,
+            "ref_id": o.ref_id,
+            "created_at": o.created_at.isoformat() if o.created_at else None,
+            "completed_at": o.completed_at.isoformat() if o.completed_at else None,
+        }
+        for o, email in rows
+    ]
+
+
+# ── User Topup with Notification ────────────────────────────────────────────
+
+@admin.post("/users/topup-with-notify")
+async def user_topup_with_notify(
+    t: UserTopup,
+    _auth: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin topup + send notification to user."""
+    from app.models.orm import Notification
+    ws = WalletService(db)
+    try:
+        new_balance = await ws.topup(t.user_id, t.amount_irr,
+                                     note=t.note or "admin topup")
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    
+    # Send notification
+    notif = Notification(
+        user_id=t.user_id,
+        message=f"شارژ کیف پول به مبلغ {t.amount_irr:,} ریال توسط ادمین انجام شد. موجودی جدید: {new_balance:,} ریال"
+    )
+    db.add(notif)
+    await db.commit()
+    
+    return {"ok": True, "user_id": t.user_id, "new_balance_irr": new_balance}

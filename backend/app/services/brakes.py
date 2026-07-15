@@ -25,7 +25,10 @@ class BrakeService:
 
     async def global_settings(self, key: str) -> dict:
         row = await self.db.scalar(select(GlobalSetting).where(GlobalSetting.key == key))
-        return json.loads(row.value_json) if row else {}
+        if not row:
+            return {}
+        vj = row.value_json
+        return vj if isinstance(vj, dict) else json.loads(vj)
 
     async def fx_circuit_breaker(self, current_rate: float, last_pricing_rate: float) -> bool:
         """Return True if breaker TRIPPED (rate spiked >5%)."""
@@ -87,6 +90,6 @@ class BrakeService:
         if not row:
             row = GlobalSetting(key=key, value_json="{}")
             self.db.add(row)
-        row.value_json = json.dumps(value)
+        row.value_json = value
         row.updated_at = datetime.utcnow()
         await self.db.commit()

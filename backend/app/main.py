@@ -50,6 +50,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost:3005",
+        "http://127.0.0.1:3005",
         "https://api.multiai.ir",
         "https://multiai.ir",
     ],
@@ -58,7 +60,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-from app.routers import chat, wallet, admin, payment, auth, notifications, referral  # noqa: E402
+from app.routers import chat, wallet, admin, payment, auth, notifications, referral, api_keys, conversations  # noqa: E402
 app.include_router(chat.router)
 app.include_router(wallet.router)
 app.include_router(admin.router)
@@ -66,6 +68,8 @@ app.include_router(payment.router)
 app.include_router(auth.router)
 app.include_router(notifications.router)
 app.include_router(referral.router)
+app.include_router(api_keys.router)
+app.include_router(conversations.router)
 
 
 @app.get("/health", tags=["system"])

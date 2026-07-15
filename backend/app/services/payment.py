@@ -87,17 +87,23 @@ async def create_order(db: AsyncSession, user_id: int, amount_irr: int) -> Payme
 
 async def complete_order(db: AsyncSession, order_id: str,
                           authority: str, ref_id: str | None = None) -> PaymentOrder:
-    """Mark order as completed after successful verification."""
+    """Atomically claim a pending order before crediting its wallet."""
     order = await db.scalar(
-        select(PaymentOrder).where(PaymentOrder.id == order_id))
+        select(PaymentOrder)
+        .where(PaymentOrder.id == order_id)
+        .with_for_update()
+    )
     if not order:
         raise ValueError(f"order {order_id} not found")
+    if order.status == "completed":
+        return order
+    if order.status != "pending":
+        raise ValueError(f"order {order_id} is not payable")
     order.status = "completed"
     order.authority = authority
     order.ref_id = ref_id
     order.completed_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(order)
+    await db.flush()
     return order
 
 

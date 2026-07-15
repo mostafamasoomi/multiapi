@@ -20,7 +20,9 @@ export function isAdminAuthenticated(): boolean {
 
 async function af(path: string, init?: RequestInit): Promise<Response> {
   const token = getAdminToken();
-  return fetch(path, {
+  // Admin routes go through /api/admin/ proxy in Next.js
+  const apiPath = path.startsWith('/admin/') ? `/api${path}` : path;
+  return fetch(apiPath, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -80,6 +82,36 @@ export type FxRateRow = {
   fx_buffer: number;
   effective_rate: number;
   source: string | null;
+};
+
+export type UserDetail = User & {
+  phone: string | null;
+  is_internal: boolean;
+  referral_count: number;
+  api_key_count: number;
+  conversation_count: number;
+  updated_at: string | null;
+};
+
+export type NotificationRow = {
+  id: number;
+  user_id: number;
+  user_email: string;
+  message: string;
+  read: boolean;
+  created_at: string | null;
+};
+
+export type PaymentRow = {
+  id: string;
+  user_id: number;
+  user_email: string;
+  amount_irr: number;
+  status: string;
+  authority: string | null;
+  ref_id: string | null;
+  created_at: string | null;
+  completed_at: string | null;
 };
 
 export type BrakeStatus = {
@@ -202,5 +234,35 @@ export async function toggleKillSwitch(enable: boolean): Promise<unknown> {
 export async function runMarginCheck(): Promise<{ disabled_models: string[] }> {
   const r = await af('/admin/brakes/margin-check', { method: 'POST' });
   if (!r.ok) throw new Error('خطا در بررسی مارجین');
+  return r.json();
+}
+
+// User Detail
+export async function fetchUserDetail(userId: number): Promise<UserDetail> {
+  const r = await af(`/admin/users/${userId}`);
+  if (!r.ok) throw new Error('خطا در بارگذاری اطلاعات کاربر');
+  return r.json();
+}
+
+// Notifications
+export async function fetchAllNotifications(): Promise<NotificationRow[]> {
+  const r = await af('/admin/notifications');
+  if (!r.ok) throw new Error('خطا در بارگذاری اعلانها');
+  return r.json();
+}
+
+export async function sendNotification(userId: number, message: string): Promise<unknown> {
+  const r = await af('/admin/notifications', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId, message }),
+  });
+  if (!r.ok) throw new Error('خطا در ارسال اعلان');
+  return r.json();
+}
+
+// Payments
+export async function fetchAllPayments(): Promise<PaymentRow[]> {
+  const r = await af('/admin/payments');
+  if (!r.ok) throw new Error('خطا در بارگذاری پرداختها');
   return r.json();
 }

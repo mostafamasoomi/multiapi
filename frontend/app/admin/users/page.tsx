@@ -4,8 +4,10 @@ import {
   fetchUsers,
   topupUser,
   fetchUserLedger,
+  fetchUserDetail,
   updateUserStatus,
   User,
+  UserDetail,
   LedgerEntry,
 } from '../../../lib/admin-api';
 import DataTable from '../components/DataTable';
@@ -35,6 +37,10 @@ export default function UsersPage() {
   const [ledgerUser, setLedgerUser] = useState<number | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
+
+  // User detail state
+  const [detailUser, setDetailUser] = useState<UserDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   // Confirm dialog state
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -85,6 +91,19 @@ export default function UsersPage() {
       setToast('خطا در بارگذاری تراکنش‌ها');
     } finally {
       setLedgerLoading(false);
+    }
+  }
+
+  async function viewDetail(userId: number) {
+    setDetailLoading(true);
+    try {
+      const detail = await fetchUserDetail(userId);
+      setDetailUser(detail);
+    } catch {
+      setToastOk(false);
+      setToast('خطا در بارگذاری اطلاعات کاربر');
+    } finally {
+      setDetailLoading(false);
     }
   }
 
@@ -225,6 +244,7 @@ export default function UsersPage() {
         rowKey="id"
         loading={false}
         emptyMessage="کاربری یافت نشد"
+        onRowClick={(u: User) => viewDetail(u.id)}
       />
 
       {/* Ledger Modal */}
@@ -287,6 +307,109 @@ export default function UsersPage() {
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+
+      {/* User Detail Modal */}
+      {detailUser && (
+        <div className="admin-modal-overlay" onClick={() => setDetailUser(null)}>
+          <div className="admin-modal" style={{ maxWidth: 600 }} onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-head">
+              <span>👤 اطلاعات کاربر #{detailUser.id}</span>
+              <button className="admin-close-btn" onClick={() => setDetailUser(null)}>✕</button>
+            </div>
+            <div className="admin-modal-body">
+              {detailLoading ? (
+                <div className="admin-loading"><div className="typing"><span /><span /><span /></div></div>
+              ) : (
+                <div style={{ display: 'grid', gap: 16 }}>
+                  {/* Info Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="admin-stat-card">
+                      <div className="admin-stat-label">ایمیل</div>
+                      <div className="admin-stat-value" style={{ fontSize: 14 }}>{detailUser.email || '---'}</div>
+                    </div>
+                    <div className="admin-stat-card">
+                      <div className="admin-stat-label">نام کاربری</div>
+                      <div className="admin-stat-value" style={{ fontSize: 14 }}>{detailUser.username || '---'}</div>
+                    </div>
+                    <div className="admin-stat-card">
+                      <div className="admin-stat-label">تلفن</div>
+                      <div className="admin-stat-value" style={{ fontSize: 14 }}>{detailUser.phone || '---'}</div>
+                    </div>
+                    <div className="admin-stat-card">
+                      <div className="admin-stat-label">تلگرام</div>
+                      <div className="admin-stat-value" style={{ fontSize: 14 }}>{detailUser.telegram_id || '---'}</div>
+                    </div>
+                  </div>
+
+                  {/* Stats */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                    <div className="admin-stat-card" style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent)' }}>{ir(detailUser.balance_irr)}</div>
+                      <div className="admin-stat-label">موجودی (ریال)</div>
+                    </div>
+                    <div className="admin-stat-card" style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 24, fontWeight: 800 }}>{detailUser.api_key_count}</div>
+                      <div className="admin-stat-label">کلید API</div>
+                    </div>
+                    <div className="admin-stat-card" style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 24, fontWeight: 800 }}>{detailUser.conversation_count}</div>
+                      <div className="admin-stat-label">مکالمه</div>
+                    </div>
+                    <div className="admin-stat-card" style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 24, fontWeight: 800 }}>{detailUser.referral_count}</div>
+                      <div className="admin-stat-label">دعوت</div>
+                    </div>
+                  </div>
+
+                  {/* Status & Plan */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                    <div className="admin-stat-card">
+                      <div className="admin-stat-label">وضعیت</div>
+                      <div style={{ color: detailUser.status === 'active' ? 'var(--ok)' : 'var(--danger)', fontWeight: 700 }}>
+                        {detailUser.status === 'active' ? '✅ فعال' : detailUser.status}
+                      </div>
+                    </div>
+                    <div className="admin-stat-card">
+                      <div className="admin-stat-label">پلن</div>
+                      <div className="admin-stat-value">{detailUser.plan_id || 'رایگان'}</div>
+                    </div>
+                    <div className="admin-stat-card">
+                      <div className="admin-stat-label">سقف روزانه</div>
+                      <div className="admin-stat-value">{ir(detailUser.daily_spend_cap_irr)} ریال</div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="admin-btn-sm" onClick={() => { setDetailUser(null); viewLedger(detailUser.id); }}>📋 دفترچه تراکنش</button>
+                    <button className="admin-btn-sm" onClick={() => { setDetailUser(null); setTopupId(detailUser.id); setTopupAmt(''); }}>💰 شارژ کیف پول</button>
+                    <button
+                      className={`admin-btn-sm ${detailUser.status === 'active' ? 'admin-btn-danger' : 'admin-btn-success'}`}
+                      onClick={async () => {
+                        const newStatus = detailUser.status === 'active' ? 'suspended' : 'active';
+                        await updateUserStatus(detailUser.id, newStatus);
+                        setToastOk(true);
+                        setToast(`وضعیت تغییر کرد`);
+                        setDetailUser(null);
+                        load();
+                      }}
+                    >
+                      {detailUser.status === 'active' ? '🚫 توقف' : '✅ فعالسازی'}
+                    </button>
+                  </div>
+
+                  {/* Dates */}
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 16 }}>
+                    <span>عضویت: {detailUser.created_at ? new Date(detailUser.created_at).toLocaleDateString('fa-IR') : '---'}</span>
+                    <span>آخرین بروزرسانی: {detailUser.updated_at ? new Date(detailUser.updated_at).toLocaleDateString('fa-IR') : '---'}</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

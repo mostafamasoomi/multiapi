@@ -56,6 +56,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     username: str | None = None
+    referral_code: str | None = None
 
     @field_validator("email")
     @classmethod
@@ -125,6 +126,24 @@ async def register(req: RegisterRequest, request: Request, db: AsyncSession = De
     db.add(wallet)
     await db.commit()
     await db.refresh(user)
+
+    # Track referral if code provided
+    if req.referral_code:
+        from app.models.orm import Referral
+        import hashlib
+        # Find referrer by matching generated code
+        all_users = await db.execute(select(User.id))
+        for (uid,) in all_users:
+            digest = hashlib.sha256(f"multiapi-ref-{uid}".encode()).hexdigest()
+            if digest[:6].upper() == req.referral_code.upper():
+                referral = Referral(
+                    referrer_user_id=uid,
+                    referred_user_id=user.id,
+                    referral_code=req.referral_code.upper(),
+                )
+                db.add(referral)
+                await db.commit()
+                break
 
     # Generate DB-backed token
     api_key = await create_db_token(db, user.id, name="Web Panel")

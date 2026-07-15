@@ -2,7 +2,6 @@
 const BACKEND = process.env.BACKEND_URL || 'http://127.0.0.1:8800';
 
 const nextConfig = {
-  output: 'standalone',
   reactStrictMode: true,
   async rewrites() {
     return [
@@ -23,14 +22,18 @@ const nextConfig = {
       // Payment
       { source: '/api/pay/create', destination: `${BACKEND}/pay/create` },
       { source: '/api/pay/callback', destination: `${BACKEND}/pay/callback` },
-      { source: '/api/payments', destination: `${BACKEND}/payment/history` },
-      { source: '/api/memory', destination: `${BACKEND}/api/memory` },
-      { source: '/api/memory/:path*', destination: `${BACKEND}/api/memory/:path*` },
+      { source: '/api/payments', destination: `${BACKEND}/pay/history` },
       // Notifications
       { source: '/api/notifications', destination: `${BACKEND}/api/notifications` },
       { source: '/api/notifications/:nid/read', destination: `${BACKEND}/api/notifications/:nid/read` },
       // Referral
       { source: '/api/referral/stats', destination: `${BACKEND}/api/referral/stats` },
+      // Conversations
+      { source: '/api/conversations', destination: `${BACKEND}/api/conversations` },
+      { source: '/api/conversations/:id', destination: `${BACKEND}/api/conversations/:id` },
+      // API Keys
+      { source: '/api/me/api-keys', destination: `${BACKEND}/api/me/api-keys` },
+      { source: '/api/me/api-keys/:id', destination: `${BACKEND}/api/me/api-keys/:id` },
       // Admin
       { source: '/api/admin/:path*', destination: `${BACKEND}/admin/:path*` },
       { source: '/health', destination: `${BACKEND}/health` },

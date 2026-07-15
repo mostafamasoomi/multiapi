@@ -187,4 +187,4 @@ async def require_admin(authorization: str = Header(None)):
         raise HTTPException(status_code=503, detail="admin auth not configured")
     token = (authorization or "").replace("Bearer ", "")
     if not token or not secrets.compare_digest(token, ADMIN_TOKEN):
-        raise HTTPException(status_code=403, detail="admin_auth_required")
+        raise HTTPException(status_code=401, detail="admin_auth_required")

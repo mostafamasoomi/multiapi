@@ -19,7 +19,6 @@ class ChatCompletionRequest(BaseModel):
 
 
 class WalletTopupRequest(BaseModel):
-    user_id: int
     amount_irr: int = Field(ge=1000)  # min topup in IRR
 
 
