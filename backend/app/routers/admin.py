@@ -10,6 +10,7 @@ Admin can:
 """
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -21,6 +22,8 @@ from app.db.session import get_session
 from app.models import FxRate, GlobalSetting, Ledger, ModelAlias, PnlDaily, Pricing, Quota, User, Wallet
 from app.services.brakes import BrakeService
 from app.services.wallet import WalletService
+
+logger = logging.getLogger(__name__)
 
 admin = APIRouter(prefix="/admin", tags=["admin"])
 router = admin
@@ -161,7 +164,8 @@ async def user_topup(
         new_balance = await ws.topup(t.user_id, t.amount_irr,
                                      note=t.note or "admin topup")
     except Exception as e:
-        raise HTTPException(400, str(e))
+        logger.error(f"Admin topup failed for user {t.user_id}: {e}")
+        raise HTTPException(400, "topup failed")
     return {"ok": True, "user_id": t.user_id, "new_balance_irr": new_balance}
 
 
@@ -483,20 +487,21 @@ async def list_all_notifications(
     ]
 
 
+class NotificationCreate(BaseModel):
+    user_id: int
+    message: str = Field(min_length=1)
+
+
 @admin.post("/notifications")
 async def send_notification(
-    body: dict,
+    body: NotificationCreate,
     _auth: str = Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
     """Send notification to a user."""
     from app.models.orm import Notification
-    user_id = body.get("user_id")
-    message = body.get("message", "")
-    if not user_id or not message:
-        raise HTTPException(400, "user_id and message required")
-    
-    notif = Notification(user_id=user_id, message=message)
+
+    notif = Notification(user_id=body.user_id, message=body.message)
     db.add(notif)
     await db.commit()
     return {"ok": True, "message": "notification sent"}
@@ -548,7 +553,8 @@ async def user_topup_with_notify(
         new_balance = await ws.topup(t.user_id, t.amount_irr,
                                      note=t.note or "admin topup")
     except Exception as e:
-        raise HTTPException(400, str(e))
+        logger.error(f"Admin topup-with-notify failed for user {t.user_id}: {e}")
+        raise HTTPException(400, "topup failed")
     
     # Send notification
     notif = Notification(

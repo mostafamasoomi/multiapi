@@ -20,14 +20,14 @@ interface Model {
 }
 
 const tierColors: Record<string, string> = {
-  pro: '#8b5cf6',
-  standard: '#06b6d4',
+  flagship: '#8b5cf6',
+  mid: '#06b6d4',
   mini: '#22c55e',
 }
 
 const tierLabels: Record<string, string> = {
-  pro: 'حرفه‌ای',
-  standard: 'استاندارد',
+  flagship: 'حرفهای',
+  mid: 'استاندارد',
   mini: 'سبک',
 }
 
@@ -70,7 +70,7 @@ export default function ModelsPage() {
 
         {/* Filters */}
         <div className="flex gap-2 mb-6 flex-wrap">
-          {['all', 'pro', 'standard', 'mini'].map(t => (
+          {['all', 'flagship', 'mid', 'mini'].map(t => (
             <button
               key={t}
               onClick={() => setFilter(t)}
@@ -105,7 +105,7 @@ export default function ModelsPage() {
                   <StatusDot status={model.active ? 'online' : 'offline'} />
                   <span className="font-mono font-bold text-text">{model.alias}</span>
                 </div>
-                <Badge variant={model.tier as 'pro' | 'standard' | 'mini'}>
+                <Badge variant={model.tier as 'flagship' | 'mid' | 'mini'}>
                   {tierLabels[model.tier] || model.tier}
                 </Badge>
               </div>

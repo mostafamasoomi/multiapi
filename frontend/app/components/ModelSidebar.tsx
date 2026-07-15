@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 type Model = { alias: string; tier: string; active: boolean; auto_disabled: boolean };
 
-const TIER_LABEL: Record<string, string> = { mini: 'سبک', standard: 'استاندارد', pro: 'حرفهای' };
+const TIER_LABEL: Record<string, string> = { mini: 'سبک', mid: 'استاندارد', flagship: 'حرفهای' };
 
 export function ModelSidebar({
   models,
@@ -26,9 +26,9 @@ export function ModelSidebar({
   onNewChat?: () => void;
 }) {
   const filtered = models.filter((m) => m.alias.toLowerCase().includes(query.toLowerCase()));
-  const groups: Record<string, Model[]> = { pro: [], standard: [], mini: [] };
+  const groups: Record<string, Model[]> = { flagship: [], mid: [], mini: [] };
   filtered.forEach((m) => {
-    const g = groups[m.tier] ? m.tier : 'standard';
+    const g = groups[m.tier] ? m.tier : 'mid';
     groups[g].push(m);
   });
 
@@ -55,7 +55,7 @@ export function ModelSidebar({
       />
 
       <div className="model-list">
-        {(['pro', 'standard', 'mini'] as const).map((tier) =>
+        {(['flagship', 'mid', 'mini'] as const).map((tier) =>
           groups[tier].length ? (
             <div key={tier}>
               <div className="model-group-label">{TIER_LABEL[tier] ?? tier}</div>
@@ -119,7 +119,7 @@ export function ModelSidebar({
         </Link>
       </nav>
 
-      <div className="sidebar-foot">دروازه هوش مصنوعی · نسخه بتا</div>
+      <div className="sidebar-foot">دروازه هوش مصنوعی</div>
     </aside>
   );
 }

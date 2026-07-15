@@ -74,7 +74,7 @@ export default function Home() {
             <div style={{ color: '#8b949e' }}># فقط endpoint را عوض کنید</div>
             <div><span style={{ color: '#ff7b72' }}>curl</span> https://api.multiapi.ir/v1/chat/completions \</div>
             <div style={{ paddingLeft: 16 }}>-H <span style={{ color: '#a5d6ff' }}>"Authorization: Bearer YOUR_API_KEY"</span> \</div>
-            <div style={{ paddingLeft: 16 }}>-d <span style={{ color: '#a5d6ff' }}>'{"{"}"model": "gpt-4o", "messages":[...]{"}"}'</span></div>
+            <div style={{ paddingLeft: 16 }}>-d <span style={{ color: '#a5d6ff' }}>{`'{"model":"gpt-4o","messages":[...]}'`}</span></div>
           </div>
         </div>
       </section>

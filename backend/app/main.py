@@ -42,19 +42,36 @@ async def lifespan(app: FastAPI):
     await close_http_client()
 
 
-app = FastAPI(title=f"{settings.app_name} API", version="0.1.0", lifespan=lifespan)
+# SECURITY: Disable OpenAPI docs in production to prevent API schema exposure
+_docs_url = "/docs" if not settings.is_prod else None
+_redoc_url = "/redoc" if not settings.is_prod else None
+_openapi_url = "/openapi.json" if not settings.is_prod else None
 
-# CORS — restrict to known origins
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+app = FastAPI(
+    title=f"{settings.app_name} API",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
+    openapi_url=_openapi_url,
+)
+
+# CORS — restrict to known origins (exclude localhost in production)
+_cors_origins = [
+    "https://api.multiai.ir",
+    "https://multiai.ir",
+]
+if not settings.is_prod:
+    _cors_origins.extend([
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3005",
         "http://127.0.0.1:3005",
-        "https://api.multiai.ir",
-        "https://multiai.ir",
-    ],
+    ])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
@@ -79,4 +96,5 @@ async def health():
 
 @app.get("/ready", tags=["system"])
 async def ready():
-    return {"status": "ready", "ninrouter_internal": settings.ninrouter_is_internal}
+    # SECURITY: Don't expose internal configuration details
+    return {"status": "ready"}

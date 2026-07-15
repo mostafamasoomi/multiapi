@@ -174,16 +174,16 @@ const errorCodes = [
 ];
 
 const models = [
-  { alias: 'gpt-4o', name: 'GPT-4o', tier: 'pro', input: '۱۸,۰۰۰', output: '۶۲,۰۰۰', ctx: '۱۲۸,۰۰۰', desc: 'بهترین مدل برای کارهای پیچیده، کدنویسی و تحلیل' },
+  { alias: 'gpt-4o', name: 'GPT-4o', tier: 'flagship', input: '۱۸,۰۰۰', output: '۶۲,۰۰۰', ctx: '۱۲۸,۰۰۰', desc: 'بهترین مدل برای کارهای پیچیده، کدنویسی و تحلیل' },
   { alias: 'gpt-4o-mini', name: 'GPT-4o Mini', tier: 'mini', input: '۱,۴۰۰', output: '۵,۶۰۰', ctx: '۱۲۸,۰۰۰', desc: 'مدل سبک و سریع برای مکالمات ساده' },
-  { alias: 'claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', tier: 'pro', input: '۲۲,۰۰۰', output: '۷۸,۰۰۰', ctx: '۲۰۰,۰۰۰', desc: 'استدلال قوی، نوشتن خلاقانه و تحلیل عمیق' },
+  { alias: 'claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', tier: 'flagship', input: '۲۲,۰۰۰', output: '۷۸,۰۰۰', ctx: '۲۰۰,۰۰۰', desc: 'استدلال قوی، نوشتن خلاقانه و تحلیل عمیق' },
   { alias: 'claude-haiku-4.5', name: 'Claude Haiku 4.5', tier: 'mini', input: '۱,۸۰۰', output: '۷,۲۰۰', ctx: '۲۰۰,۰۰۰', desc: 'سریع، ارزان و عالی برای کارهای روزمره' },
-  { alias: 'deepseek-3.2', name: 'DeepSeek 3.2', tier: 'standard', input: '۳,۵۰۰', output: '۱۴,۰۰۰', ctx: '۱۲۸,۰۰۰', desc: 'تعادل عالی بین قیمت و کیفیت، کدنویسی قوی' },
-  { alias: 'qwen3-coder-next', name: 'Qwen3 Coder', tier: 'standard', input: '۳,۰۰۰', output: '۱۲,۰۰۰', ctx: '۱۲۸,۰۰۰', desc: 'متخصص کدنویسی با پشتیبانی از زبان‌های مختلف' },
+  { alias: 'deepseek-3.2', name: 'DeepSeek 3.2', tier: 'mid', input: '۳,۵۰۰', output: '۱۴,۰۰۰', ctx: '۱۲۸,۰۰۰', desc: 'تعادل عالی بین قیمت و کیفیت، کدنویسی قوی' },
+  { alias: 'qwen3-coder-next', name: 'Qwen3 Coder', tier: 'mid', input: '۳,۰۰۰', output: '۱۲,۰۰۰', ctx: '۱۲۸,۰۰۰', desc: 'متخصص کدنویسی با پشتیبانی از زبانهای مختلف' },
 ];
 
-const tierColors: Record<string, string> = { pro: '#8b5cf6', standard: '#06b6d4', mini: '#22c55e' };
-const tierLabels: Record<string, string> = { pro: 'حرفه‌ای', standard: 'استاندارد', mini: 'سبک' };
+const tierColors: Record<string, string> = { flagship: '#8b5cf6', mid: '#06b6d4', mini: '#22c55e' };
+const tierLabels: Record<string, string> = { flagship: 'حرفهای', mid: 'استاندارد', mini: 'سبک' };
 
 export default function DocsPage() {
   return (

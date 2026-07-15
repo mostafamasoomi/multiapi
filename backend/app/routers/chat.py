@@ -106,9 +106,8 @@ async def chat_completions(req: ChatCompletionRequest, request: Request,
         await ws.place_hold(user_id, est_cost, request_id, req.model,
                             overprovision=settings.hold_overprovision)
     except Exception as e:
-        if "402" in str(e):
-            return _err(402, "insufficient_funds")
-        raise
+        logger.error(f"Insufficient funds for user {user_id}: {e}")
+        return _err(402, "insufficient_funds")
 
     # Rate limit check — MUST release hold if denied
     if not await acquire(user_id):
@@ -135,9 +134,8 @@ async def chat_completions(req: ChatCompletionRequest, request: Request,
                     yield "data: " + json.dumps({"choices": [{"delta": {"content": delta}}]}) + "\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
-            err_msg = str(e) or "upstream_error"
-            logger.error(f"Stream error: {err_msg}")
-            yield "data: " + json.dumps({"error": err_msg}) + "\n\n"
+            logger.error(f"Stream error: {e}", exc_info=True)
+            yield "data: " + json.dumps({"error": "upstream_error"}) + "\n\n"
             yield "data: [DONE]\n\n"
         finally:
             # CRITICAL: Acquire FRESH session for settlement (request-scoped may be closed)

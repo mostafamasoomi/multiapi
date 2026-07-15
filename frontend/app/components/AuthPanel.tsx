@@ -112,9 +112,9 @@ export function AuthPanel({ onAuth }: { onAuth: (key: string) => void }) {
 
         <div className="auth-switch">
           {mode === 'login' ? (
-            <>حساب ندارید؟{' '}<button onClick={() => { setMode('register'); setError(''); }}>ثبت‌نام کنید</button></>
+            <>حساب ندارید؟{' '}<button type="button" onClick={() => { setMode('register'); setError(''); }}>ثبتنام کنید</button></>
           ) : (
-            <>قبلاً ثبت‌نام کردید؟{' '}<button onClick={() => { setMode('login'); setError(''); }}>ورود</button></>
+            <>قبلاً ثبتنام کردید؟{' '}<button type="button" onClick={() => { setMode('login'); setError(''); }}>ورود</button></>
           )}
         </div>
 

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Card, MetricCard, Badge, PageHeader, Skeleton, StatusDot } from '@/components/ui'
 import Button from '@/components/ui/Button'
 
-const API = ''
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8800'
 
 interface UserInfo {
   id: number
@@ -179,8 +179,8 @@ export default function DashboardPage() {
                   <StatusDot status={model.active ? 'online' : 'offline'} />
                   <span className="text-sm text-text font-mono">{model.alias}</span>
                 </div>
-                <Badge variant={model.tier as 'pro' | 'standard' | 'mini'}>
-                  {model.tier === 'pro' ? 'حرفه‌ای' : model.tier === 'standard' ? 'استاندارد' : 'سبک'}
+                <Badge variant={model.tier as 'flagship' | 'mid' | 'mini'}>
+                  {model.tier === 'flagship' ? 'حرفهای' : model.tier === 'mid' ? 'استاندارد' : 'سبک'}
                 </Badge>
               </div>
             ))}

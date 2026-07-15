@@ -30,7 +30,7 @@ export function Card({ children, className = '', hover, padding = 'md', onClick 
 }
 
 /* ─── Badge ─── */
-type BadgeVariant = 'pro' | 'standard' | 'mini' | 'success' | 'danger' | 'warning' | 'muted'
+type BadgeVariant = 'flagship' | 'mid' | 'mini' | 'success' | 'danger' | 'warning' | 'muted'
 
 interface BadgeProps {
   children: ReactNode
@@ -39,8 +39,8 @@ interface BadgeProps {
 }
 
 const badgeVariants: Record<BadgeVariant, string> = {
-  pro: 'bg-accent/15 text-accent',
-  standard: 'bg-accent-2/15 text-accent-2',
+  flagship: 'bg-accent/15 text-accent',
+  mid: 'bg-accent-2/15 text-accent-2',
   mini: 'bg-success/15 text-success',
   success: 'bg-success/15 text-success',
   danger: 'bg-danger/15 text-danger',

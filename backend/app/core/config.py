@@ -48,7 +48,10 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
 
-    ninrouter_base_url: str = Field(default="http://127.0.0.1:4001", alias="NINEROUTER_BASE_URL")
+    @property
+    def is_prod(self) -> bool:
+        """Check if running in production."""
+        return self.env == "prod"
 
     @property
     def ninrouter_is_internal(self) -> bool:

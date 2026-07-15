@@ -5,6 +5,7 @@ HttpOnly cookie support, Persian validation messages.
 """
 from __future__ import annotations
 
+import logging
 import os
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -12,6 +13,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
+IS_PROD = os.getenv("ENV", "dev") == "prod"
+REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 
 from app.db.session import get_session
 from app.models import User, Wallet
@@ -28,26 +33,65 @@ from app.services.wallet import WalletService
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
-IS_PROD = os.getenv("ENV", "dev") == "prod"
-
-# ── Rate limiting (simple in-memory, per-IP) ──────────────────────────────────
-_rate_limit_store: dict[str, list[float]] = {}
+# ── Rate limiting (Redis-backed, per-IP) ─────────────────────────────────────
+_rate_limit_redis = None
+_rate_limit_use_redis = False
+_rate_limit_fallback: dict[str, list[float]] = {}
 _RATE_LIMIT_WINDOW = 60       # seconds
 _RATE_LIMIT_MAX = 10           # requests per window per IP
 _RATE_LIMIT_AUTH = 5           # stricter for login/register
 
 
-def _check_rate_limit(ip: str, max_req: int = _RATE_LIMIT_MAX) -> None:
-    """Simple sliding-window rate limiter."""
+async def _get_rate_limit_redis():
+    """Get or create a Redis connection for auth rate limiting."""
+    global _rate_limit_redis, _rate_limit_use_redis
+    if _rate_limit_redis is not None:
+        return _rate_limit_redis
+    try:
+        import redis.asyncio as aioredis
+        _rate_limit_redis = aioredis.from_url(
+            REDIS_URL, decode_responses=True, socket_timeout=2,
+        )
+        await _rate_limit_redis.ping()
+        _rate_limit_use_redis = True
+        logger.info("Auth rate limiter: using Redis")
+        return _rate_limit_redis
+    except Exception as e:
+        logger.warning(f"Auth rate limiter: Redis unavailable ({e}), falling back to in-memory")
+        _rate_limit_use_redis = False
+        return None
+
+
+async def _check_rate_limit(ip: str, max_req: int = _RATE_LIMIT_MAX) -> None:
+    """Sliding-window rate limiter with Redis backend and in-memory fallback."""
     import time
+    r = await _get_rate_limit_redis()
+    if r and _rate_limit_use_redis:
+        try:
+            key = f"ratelimit:auth:{ip}"
+            now = time.time()
+            pipe = r.pipeline()
+            pipe.zremrangebyscore(key, 0, now - _RATE_LIMIT_WINDOW)
+            pipe.zcard(key)
+            pipe.zadd(key, {str(now): now})
+            pipe.expire(key, _RATE_LIMIT_WINDOW)
+            results = await pipe.execute()
+            count = results[1]  # zcard result
+            if count >= max_req:
+                raise HTTPException(429, "تعداد درخواستها بیش از حد مجاز است. لطفاً کمی صبر کنید.")
+            return
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Auth rate limiter Redis error: {e}, falling back to in-memory")
+    # Fallback: in-memory
     now = time.time()
-    if ip not in _rate_limit_store:
-        _rate_limit_store[ip] = []
-    # Remove old entries
-    _rate_limit_store[ip] = [t for t in _rate_limit_store[ip] if now - t < _RATE_LIMIT_WINDOW]
-    if len(_rate_limit_store[ip]) >= max_req:
-        raise HTTPException(429, "تعداد درخواست‌ها بیش از حد مجاز است. لطفاً کمی صبر کنید.")
-    _rate_limit_store[ip].append(now)
+    if ip not in _rate_limit_fallback:
+        _rate_limit_fallback[ip] = []
+    _rate_limit_fallback[ip] = [t for t in _rate_limit_fallback[ip] if now - t < _RATE_LIMIT_WINDOW]
+    if len(_rate_limit_fallback[ip]) >= max_req:
+        raise HTTPException(429, "تعداد درخواستها بیش از حد مجاز است. لطفاً کمی صبر کنید.")
+    _rate_limit_fallback[ip].append(now)
 
 
 # ── Request schemas ────────────────────────────────────────────────────────────
@@ -104,7 +148,7 @@ async def _get_user_id(
 @router.post("/auth/register")
 async def register(req: RegisterRequest, request: Request, db: AsyncSession = Depends(get_session)):
     """Register new user with email + password. Returns DB-backed API token."""
-    _check_rate_limit(request.client.host if request.client else "unknown", _RATE_LIMIT_AUTH)
+    await _check_rate_limit(request.client.host if request.client else "unknown", _RATE_LIMIT_AUTH)
 
     # Check if email already exists
     existing = await db.scalar(select(User).where(User.email == req.email))
@@ -176,7 +220,7 @@ async def register(req: RegisterRequest, request: Request, db: AsyncSession = De
 @router.post("/auth/login")
 async def login(req: LoginRequest, request: Request, db: AsyncSession = Depends(get_session)):
     """Login with email + password. Returns DB-backed API token."""
-    _check_rate_limit(request.client.host if request.client else "unknown", _RATE_LIMIT_AUTH)
+    await _check_rate_limit(request.client.host if request.client else "unknown", _RATE_LIMIT_AUTH)
 
     user = await db.scalar(select(User).where(User.email == req.email))
     if not user:

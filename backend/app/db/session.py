@@ -33,3 +33,7 @@ AsyncSessionLocal = async_sessionmaker(
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
+
+
+# Alias for use in background tasks / settlement that need a fresh session
+async_session = AsyncSessionLocal
