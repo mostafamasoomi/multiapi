@@ -179,3 +179,26 @@ async def chat_completions(req: ChatCompletionRequest, request: Request,
 def _err(code: int, msg: str):
     from fastapi.responses import JSONResponse
     return JSONResponse(status_code=code, content={"error": msg})
+
+
+@router.get("/models")
+async def list_models_openai(db: AsyncSession = Depends(get_session)):
+    """OpenAI-compatible /v1/models endpoint."""
+    from app.models import ModelAlias
+    rows = await db.execute(
+        select(ModelAlias).where(ModelAlias.is_active == True, ModelAlias.auto_disabled == False)
+    )
+    models = rows.scalars().all()
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": m.alias,
+                "object": "model",
+                "created": 0,
+                "owned_by": "multiapi",
+                "permission": [],
+            }
+            for m in models
+        ],
+    }
